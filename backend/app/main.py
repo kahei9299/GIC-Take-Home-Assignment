@@ -1,12 +1,18 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.cafes.router import router as cafe_router
 from app.core.config import get_settings
 from app.core.error_handlers import register_exception_handlers
+from app.core.logging import add_request_logging_middleware, configure_logging
+
+import logging
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    configure_logging(settings)
+    logger = logging.getLogger("app.lifecycle")
 
     app = FastAPI(title="GIC Take-Home Backend", version="0.1.0")
     app.add_middleware(
@@ -16,7 +22,19 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    add_request_logging_middleware(app)
     register_exception_handlers(app)
+    app.include_router(cafe_router)
+    logger.info(
+        "Application startup complete.",
+        extra={
+            "event": "app_startup",
+            "app_name": settings.app_name,
+            "app_env": settings.app_env,
+            "log_level": settings.log_level.upper(),
+            "log_format": settings.log_format.lower(),
+        },
+    )
 
     @app.get("/health", tags=["health"])
     def healthcheck() -> dict[str, str]:

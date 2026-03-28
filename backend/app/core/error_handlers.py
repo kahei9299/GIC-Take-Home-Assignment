@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -16,6 +18,8 @@ def _sanitize_validation_errors(errors: list[dict]) -> list[dict]:
 
 
 def register_exception_handlers(app: FastAPI) -> None:
+    logger = logging.getLogger("app.error")
+
     @app.exception_handler(ApplicationError)
     async def handle_application_error(_: Request, exc: ApplicationError) -> JSONResponse:
         status_code = {
@@ -43,5 +47,27 @@ def register_exception_handlers(app: FastAPI) -> None:
                 "code": "VALIDATION_ERROR",
                 "message": "Request validation failed.",
                 "details": {"errors": _sanitize_validation_errors(exc.errors())},
+            },
+        )
+
+    @app.exception_handler(Exception)
+    async def handle_unexpected_exception(request: Request, exc: Exception) -> JSONResponse:
+        """Log unexpected errors and return a safe error payload."""
+
+        logger.exception(
+            "Unhandled exception.",
+            extra={
+                "event": "unhandled_exception",
+                "request_id": getattr(request.state, "request_id", None),
+                "method": request.method,
+                "path": request.url.path,
+            },
+        )
+        return JSONResponse(
+            status_code=500,
+            content={
+                "code": "INTERNAL_SERVER_ERROR",
+                "message": "An unexpected error occurred.",
+                "details": None,
             },
         )

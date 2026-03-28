@@ -7,7 +7,12 @@ import os
 import pytest
 from alembic import command
 from alembic.config import Config
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
+
+import app.core.database as database_module
+from app.core.config import get_settings
+from app.main import app
 
 
 def _database_url() -> str:
@@ -41,3 +46,18 @@ def migrated_engine():
     finally:
         engine.dispose()
         command.downgrade(config, "base")
+
+
+@pytest.fixture
+def api_client(migrated_engine, monkeypatch):
+    """Return a FastAPI test client bound to the migrated PostgreSQL test database."""
+
+    monkeypatch.setenv("DATABASE_URL", str(migrated_engine.url))
+    get_settings.cache_clear()
+    database_module._engine = None
+
+    try:
+        yield TestClient(app)
+    finally:
+        get_settings.cache_clear()
+        database_module._engine = None

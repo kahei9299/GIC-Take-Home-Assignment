@@ -1,6 +1,6 @@
 # GIC-Take-Home-Assignment
 
-Current iteration: Increment 4, seed data.
+Current iteration: Increment 5, cafe read slice with production-standard logging.
 
 ## What Exists
 
@@ -11,18 +11,23 @@ Current iteration: Increment 4, seed data.
 - SQLAlchemy persistence models for cafes, employees, and employee assignments
 - Alembic migration setup with the initial schema migration
 - Seed script for demo and test-supporting data
+- Cafe read-side API modules for list and detail queries
+- Centralized JSON logging with request IDs
 - shared exception and error-handler setup
 - shared enums, validators, and utility helpers
 - `GET /health`
+- `GET /cafes`
+- `GET /cafes/{id}`
 - backend integration and unit tests for shared primitives
 - PostgreSQL-backed schema verification tests for the persistence layer
 - PostgreSQL-backed seed integration tests
+- PostgreSQL-backed cafe read integration tests
 
 ## What Does Not Exist Yet
 
-- seed data
-- cafe and employee API modules
-- repository and service layers for cafe and employee features
+- cafe write APIs
+- employee API modules
+- repository and service layers for employee features
 - frontend app
 - Docker setup
 - deployment config
@@ -37,6 +42,12 @@ backend/
       database.py
       exceptions.py
       error_handlers.py
+      logging.py
+    cafes/
+      query_service.py
+      repository.py
+      router.py
+      schemas.py
     models/
       cafe.py
       employee.py
@@ -55,7 +66,9 @@ backend/
   alembic.ini
   tests/
     integration/
+      test_cafes.py
       test_health.py
+      test_logging.py
       test_seed.py
       test_schema.py
     unit/
@@ -78,7 +91,7 @@ cp backend/.env.example backend/.env
 
 ## Database Prerequisites
 
-Increment 4 uses PostgreSQL for migrations, schema tests, and the demo seed script. Runtime settings are loaded from `backend/.env`.
+Increment 5 uses PostgreSQL for migrations, schema tests, the demo seed script, and cafe read integration tests. Runtime settings are loaded from `backend/.env`.
 
 - local backend DB: set in `backend/.env` as `DATABASE_URL`
 - schema test DB: set `TEST_DATABASE_URL` to a separate PostgreSQL database you can safely migrate and downgrade during tests
@@ -101,8 +114,11 @@ uvicorn app.main:app --reload
 
 The backend reads:
 
+- `APP_NAME` from `backend/.env`
 - `DATABASE_URL` from `backend/.env`
 - `FRONTEND_URL` from `backend/.env`
+- `LOG_LEVEL` from `backend/.env`
+- `LOG_FORMAT` from `backend/.env`
 - `TEST_DATABASE_URL` from your shell when running PostgreSQL schema tests
 
 ## Run Migrations
@@ -137,9 +153,21 @@ The seed script:
 - is idempotent and safe to rerun
 - preserves generated cafe, employee, and assignment identifiers for existing seeded rows
 
+## Logging
+
+Increment 5 adds centralized application logging with safe defaults.
+
+- default format: JSON
+- default level: `INFO`
+- each HTTP response includes `X-Request-ID`
+- request logs include method, path, status code, duration, and request ID
+- request bodies, secrets, DB URLs, and auth headers are not logged
+
 App endpoint:
 
 - Health: `http://127.0.0.1:8000/health`
+- Cafes list: `http://127.0.0.1:8000/cafes`
+- Cafe detail: `http://127.0.0.1:8000/cafes/<uuid>`
 
 Expected response:
 
@@ -174,6 +202,22 @@ cd backend
 pytest tests/integration/test_seed.py
 ```
 
+Cafe read integration tests against PostgreSQL:
+
+```bash
+. .venv/bin/activate
+cd backend
+pytest tests/integration/test_cafes.py
+```
+
+Logging and request ID integration tests:
+
+```bash
+. .venv/bin/activate
+cd backend
+pytest tests/integration/test_logging.py
+```
+
 Run the full backend suite:
 
 ```bash
@@ -184,23 +228,26 @@ pytest
 
 ## Current Increment
 
-Increment 4 adds deterministic demo seed data:
+Increment 5 adds the cafe read API slice and production-standard request logging:
 
-- `backend/scripts/seed.py` for idempotent data loading
-- 24 cafes, 24 employees, and 26 assignment history rows
-- generated IDs on insert-only paths with stable rerun matching
-- PostgreSQL-backed seed integration tests
+- `GET /cafes` with optional normalized location filtering
+- `GET /cafes/{id}` for edit-page prefill
+- read-side cafe package with repository, query service, router, and schemas
+- JSON request logs with `X-Request-ID` propagation
+- PostgreSQL-backed cafe integration tests and logging integration tests
 
 ## Changes Since Previous Increment
 
-- added `backend/scripts/seed.py` for demo dataset loading
-- added seed integration coverage for row counts, idempotency, and history shape
-- updated the README with migration plus seed commands
-- kept the project backend-only with no feature routers or frontend work
+- added `backend/app/cafes/` for read-side cafe queries and response schemas
+- wired the cafe router into the FastAPI app
+- added centralized logging setup and request logging middleware
+- added integration coverage for cafe list sorting, filtering, and detail responses
+- added integration coverage for request ID propagation and structured request logging
+- updated the README with the new endpoints and test commands
 
 ## Notes
 
-- PostgreSQL is required for migrations, schema-sensitive integration tests, and the seed script.
-- The app bootstrap remains minimal; no cafe or employee API endpoints exist yet.
-- The shared error envelope and helper layer from earlier increments remain unchanged.
+- PostgreSQL is required for migrations, schema-sensitive integration tests, the seed script, and cafe read integration tests.
+- Employee and write-side APIs still do not exist yet.
+- The shared error envelope remains intact, with request IDs now returned in response headers.
 - Future work will continue backend-first before any frontend implementation begins.
