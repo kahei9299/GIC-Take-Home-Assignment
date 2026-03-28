@@ -1,6 +1,6 @@
 # GIC-Take-Home-Assignment
 
-Current iteration: Increment 3, persistence core.
+Current iteration: Increment 4, seed data.
 
 ## What Exists
 
@@ -10,11 +10,13 @@ Current iteration: Increment 3, persistence core.
 - SQLAlchemy engine/session scaffolding
 - SQLAlchemy persistence models for cafes, employees, and employee assignments
 - Alembic migration setup with the initial schema migration
+- Seed script for demo and test-supporting data
 - shared exception and error-handler setup
 - shared enums, validators, and utility helpers
 - `GET /health`
 - backend integration and unit tests for shared primitives
 - PostgreSQL-backed schema verification tests for the persistence layer
+- PostgreSQL-backed seed integration tests
 
 ## What Does Not Exist Yet
 
@@ -44,6 +46,8 @@ backend/
       utils.py
       validators.py
     main.py
+  scripts/
+    seed.py
   alembic/
     env.py
     versions/
@@ -52,6 +56,7 @@ backend/
   tests/
     integration/
       test_health.py
+      test_seed.py
       test_schema.py
     unit/
       test_metadata.py
@@ -73,7 +78,7 @@ cp backend/.env.example backend/.env
 
 ## Database Prerequisites
 
-Increment 3 introduces PostgreSQL-backed migrations and schema tests. Runtime settings are loaded from `backend/.env`.
+Increment 4 uses PostgreSQL for migrations, schema tests, and the demo seed script. Runtime settings are loaded from `backend/.env`.
 
 - local backend DB: set in `backend/.env` as `DATABASE_URL`
 - schema test DB: set `TEST_DATABASE_URL` to a separate PostgreSQL database you can safely migrate and downgrade during tests
@@ -116,6 +121,22 @@ To reset the schema back to an empty state:
 alembic downgrade base
 ```
 
+## Seed Demo Data
+
+From the repository root:
+
+```bash
+. .venv/bin/activate
+cd backend
+python scripts/seed.py
+```
+
+The seed script:
+
+- inserts 24 cafes, 24 employees, and 26 assignment rows on a fresh database
+- is idempotent and safe to rerun
+- preserves generated cafe, employee, and assignment identifiers for existing seeded rows
+
 App endpoint:
 
 - Health: `http://127.0.0.1:8000/health`
@@ -145,6 +166,14 @@ cd backend
 pytest tests/integration/test_schema.py
 ```
 
+Seed verification tests against PostgreSQL:
+
+```bash
+. .venv/bin/activate
+cd backend
+pytest tests/integration/test_seed.py
+```
+
 Run the full backend suite:
 
 ```bash
@@ -155,24 +184,23 @@ pytest
 
 ## Current Increment
 
-Increment 3 adds the persistence core:
+Increment 4 adds deterministic demo seed data:
 
-- SQLAlchemy models for `cafes`, `employees`, and `employee_assignments`
-- Alembic configuration and the initial migration
-- DB-level uniqueness, foreign-key, date-validity, and one-active-assignment constraints
-- metadata alignment and PostgreSQL schema verification tests
+- `backend/scripts/seed.py` for idempotent data loading
+- 24 cafes, 24 employees, and 26 assignment history rows
+- generated IDs on insert-only paths with stable rerun matching
+- PostgreSQL-backed seed integration tests
 
 ## Changes Since Previous Increment
 
-- added `backend/app/models/` for persistence models
-- added `backend/alembic/` and `backend/alembic.ini` for migration management
-- added the initial migration that creates the persistence schema
-- added schema-focused tests alongside the existing shared primitive tests
-- kept the project backend-only with no feature routers, seed data, or frontend work
+- added `backend/scripts/seed.py` for demo dataset loading
+- added seed integration coverage for row counts, idempotency, and history shape
+- updated the README with migration plus seed commands
+- kept the project backend-only with no feature routers or frontend work
 
 ## Notes
 
-- PostgreSQL is now required for migrations and schema-sensitive integration tests.
+- PostgreSQL is required for migrations, schema-sensitive integration tests, and the seed script.
 - The app bootstrap remains minimal; no cafe or employee API endpoints exist yet.
 - The shared error envelope and helper layer from earlier increments remain unchanged.
 - Future work will continue backend-first before any frontend implementation begins.
