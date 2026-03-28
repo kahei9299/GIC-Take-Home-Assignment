@@ -5,6 +5,7 @@ from app.cafes.router import router as cafe_router
 from app.core.config import get_settings
 from app.core.error_handlers import register_exception_handlers
 from app.core.logging import add_request_logging_middleware, configure_logging
+from app.employees.router import router as employee_router
 
 import logging
 
@@ -25,6 +26,7 @@ def create_app() -> FastAPI:
     add_request_logging_middleware(app)
     register_exception_handlers(app)
     app.include_router(cafe_router)
+    app.include_router(employee_router)
     logger.info(
         "Application startup complete.",
         extra={

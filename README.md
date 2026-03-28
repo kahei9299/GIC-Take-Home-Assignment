@@ -1,6 +1,6 @@
 # GIC-Take-Home-Assignment
 
-Current iteration: Increment 5, cafe read slice with production-standard logging.
+Current iteration: Increment 6, employee read slice with production-standard logging.
 
 ## What Exists
 
@@ -12,22 +12,26 @@ Current iteration: Increment 5, cafe read slice with production-standard logging
 - Alembic migration setup with the initial schema migration
 - Seed script for demo and test-supporting data
 - Cafe read-side API modules for list and detail queries
+- Employee read-side API modules for list and detail queries
 - Centralized JSON logging with request IDs
 - shared exception and error-handler setup
 - shared enums, validators, and utility helpers
 - `GET /health`
 - `GET /cafes`
 - `GET /cafes/{id}`
+- `GET /employees`
+- `GET /employees/{id}`
 - backend integration and unit tests for shared primitives
 - PostgreSQL-backed schema verification tests for the persistence layer
 - PostgreSQL-backed seed integration tests
 - PostgreSQL-backed cafe read integration tests
+- PostgreSQL-backed employee read integration tests
 
 ## What Does Not Exist Yet
 
 - cafe write APIs
-- employee API modules
-- repository and service layers for employee features
+- employee write APIs
+- command-side service layers for cafe and employee mutations
 - frontend app
 - Docker setup
 - deployment config
@@ -44,6 +48,11 @@ backend/
       error_handlers.py
       logging.py
     cafes/
+      query_service.py
+      repository.py
+      router.py
+      schemas.py
+    employees/
       query_service.py
       repository.py
       router.py
@@ -168,6 +177,9 @@ App endpoint:
 - Health: `http://127.0.0.1:8000/health`
 - Cafes list: `http://127.0.0.1:8000/cafes`
 - Cafe detail: `http://127.0.0.1:8000/cafes/<uuid>`
+- Employees list: `http://127.0.0.1:8000/employees`
+- Employees by cafe: `http://127.0.0.1:8000/employees?cafe_id=<uuid>`
+- Employee detail: `http://127.0.0.1:8000/employees/<employee-id>`
 
 Expected response:
 
@@ -210,6 +222,14 @@ cd backend
 pytest tests/integration/test_cafes.py
 ```
 
+Employee read integration tests against PostgreSQL:
+
+```bash
+. .venv/bin/activate
+cd backend
+pytest tests/integration/test_employees.py
+```
+
 Logging and request ID integration tests:
 
 ```bash
@@ -228,26 +248,24 @@ pytest
 
 ## Current Increment
 
-Increment 5 adds the cafe read API slice and production-standard request logging:
+Increment 6 adds the employee read API slice on top of the existing backend foundation:
 
-- `GET /cafes` with optional normalized location filtering
-- `GET /cafes/{id}` for edit-page prefill
-- read-side cafe package with repository, query service, router, and schemas
-- JSON request logs with `X-Request-ID` propagation
-- PostgreSQL-backed cafe integration tests and logging integration tests
+- `GET /employees` with optional `cafe_id` filtering
+- `GET /employees/{id}` for edit-page prefill, including current cafe name and ID
+- read-side employee package with repository, query service, router, and schemas
+- employee list rows with derived `days_worked`, current cafe name, and current cafe ID
+- PostgreSQL-backed employee integration tests alongside the existing cafe and logging coverage
 
 ## Changes Since Previous Increment
 
-- added `backend/app/cafes/` for read-side cafe queries and response schemas
-- wired the cafe router into the FastAPI app
-- added centralized logging setup and request logging middleware
-- added integration coverage for cafe list sorting, filtering, and detail responses
-- added integration coverage for request ID propagation and structured request logging
-- updated the README with the new endpoints and test commands
+- added `backend/app/employees/` for read-side employee queries and response schemas
+- wired the employee router into the FastAPI app
+- added integration coverage for employee list sorting, filtering, detail responses, and unassigned behavior
+- updated the README with the new employee endpoints and test commands
 
 ## Notes
 
-- PostgreSQL is required for migrations, schema-sensitive integration tests, the seed script, and cafe read integration tests.
-- Employee and write-side APIs still do not exist yet.
+- PostgreSQL is required for migrations, schema-sensitive integration tests, the seed script, and the cafe and employee read integration tests.
+- Write-side APIs still do not exist yet.
 - The shared error envelope remains intact, with request IDs now returned in response headers.
 - Future work will continue backend-first before any frontend implementation begins.

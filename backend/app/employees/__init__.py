@@ -1,0 +1,1 @@
+"""Employee read-side package."""
