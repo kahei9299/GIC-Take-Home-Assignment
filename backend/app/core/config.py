@@ -15,8 +15,23 @@ class Settings(BaseSettings):
     app_env: str = "development"
     database_url: str = Field(validation_alias="DATABASE_URL")
     frontend_url: str = Field(validation_alias="FRONTEND_URL")
+    database_connect_timeout_seconds: int = Field(default=5, validation_alias="DATABASE_CONNECT_TIMEOUT_SECONDS")
+    database_pool_timeout_seconds: int = Field(default=5, validation_alias="DATABASE_POOL_TIMEOUT_SECONDS")
+    database_pool_recycle_seconds: int = Field(default=1800, validation_alias="DATABASE_POOL_RECYCLE_SECONDS")
+    database_pool_size: int = Field(default=5, validation_alias="DATABASE_POOL_SIZE")
+    database_max_overflow: int = Field(default=10, validation_alias="DATABASE_MAX_OVERFLOW")
+    database_statement_timeout_ms: int = Field(default=5000, validation_alias="DATABASE_STATEMENT_TIMEOUT_MS")
     redis_url: str | None = Field(default=None, validation_alias="REDIS_URL")
     cache_ttl_seconds: int = Field(default=60, validation_alias="CACHE_TTL_SECONDS")
+    redis_socket_connect_timeout_seconds: float = Field(
+        default=0.5,
+        validation_alias="REDIS_SOCKET_CONNECT_TIMEOUT_SECONDS",
+    )
+    redis_socket_timeout_seconds: float = Field(default=0.5, validation_alias="REDIS_SOCKET_TIMEOUT_SECONDS")
+    redis_retry_max_attempts: int = Field(default=3, validation_alias="REDIS_RETRY_MAX_ATTEMPTS")
+    redis_retry_base_delay_ms: int = Field(default=50, validation_alias="REDIS_RETRY_BASE_DELAY_MS")
+    redis_retry_max_delay_ms: int = Field(default=500, validation_alias="REDIS_RETRY_MAX_DELAY_MS")
+    readiness_check_timeout_seconds: float = Field(default=1.0, validation_alias="READINESS_CHECK_TIMEOUT_SECONDS")
     log_level: str = Field(default="INFO", validation_alias="LOG_LEVEL")
     log_format: str = Field(default="json", validation_alias="LOG_FORMAT")
 

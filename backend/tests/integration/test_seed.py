@@ -39,7 +39,7 @@ def _seed_test_database(database_url: str, monkeypatch) -> None:
 def test_seed_populates_expected_row_counts_and_is_idempotent(migrated_engine, monkeypatch, capsys) -> None:
     """Verify the seed script inserts the demo dataset once and updates it on reruns."""
 
-    database_url = str(migrated_engine.url)
+    database_url = migrated_engine.url.render_as_string(hide_password=False)
     _seed_test_database(database_url, monkeypatch)
     first_run_output = capsys.readouterr().out
 
@@ -68,7 +68,7 @@ def test_seed_populates_expected_row_counts_and_is_idempotent(migrated_engine, m
 def test_seed_creates_repeated_locations_unassigned_employees_and_history(migrated_engine, monkeypatch) -> None:
     """Verify the seeded data shape supports later feature checks and manual review."""
 
-    _seed_test_database(str(migrated_engine.url), monkeypatch)
+    _seed_test_database(migrated_engine.url.render_as_string(hide_password=False), monkeypatch)
 
     with Session(migrated_engine) as session:
         bugis_count = session.scalar(
@@ -110,7 +110,7 @@ def test_seed_creates_repeated_locations_unassigned_employees_and_history(migrat
 def test_seed_preserves_one_active_assignment_per_employee(migrated_engine, monkeypatch) -> None:
     """Verify the seed script never creates multiple active assignments for one employee."""
 
-    _seed_test_database(str(migrated_engine.url), monkeypatch)
+    _seed_test_database(migrated_engine.url.render_as_string(hide_password=False), monkeypatch)
 
     with Session(migrated_engine) as session:
         active_rows = session.execute(

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI, Query
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import OperationalError
 
 from app.core.error_handlers import register_exception_handlers
 from app.core.exceptions import ConflictError, DomainValidationError, NotFoundError
@@ -34,6 +35,14 @@ def _build_test_app() -> FastAPI:
     @app.get("/unexpected")
     def unexpected() -> None:
         raise RuntimeError("boom")
+
+    @app.get("/dependency-unavailable")
+    def dependency_unavailable() -> None:
+        raise OperationalError("SELECT 1", {}, Exception("connection refused"))
+
+    @app.get("/db-auth-failure")
+    def db_auth_failure() -> None:
+        raise OperationalError("SELECT 1", {}, Exception('password authentication failed for user "postgres"'))
 
     return app
 
@@ -86,6 +95,30 @@ def test_request_validation_error_returns_422_validation_error() -> None:
 def test_unexpected_error_returns_500_internal_server_error() -> None:
     with TestClient(_build_test_app(), raise_server_exceptions=False) as client:
         response = client.get("/unexpected")
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "code": "INTERNAL_SERVER_ERROR",
+        "message": "An unexpected error occurred.",
+        "details": None,
+    }
+
+
+def test_dependency_unavailable_returns_503() -> None:
+    with TestClient(_build_test_app(), raise_server_exceptions=False) as client:
+        response = client.get("/dependency-unavailable")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "code": "DEPENDENCY_UNAVAILABLE",
+        "message": "Database dependency is unavailable.",
+        "details": None,
+    }
+
+
+def test_database_auth_failure_returns_500() -> None:
+    with TestClient(_build_test_app(), raise_server_exceptions=False) as client:
+        response = client.get("/db-auth-failure")
 
     assert response.status_code == 500
     assert response.json() == {

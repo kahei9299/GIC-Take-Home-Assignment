@@ -1,10 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.cafes.router import router as cafe_router
 from app.core.config import get_settings
 from app.core.error_handlers import register_exception_handlers
 from app.core.logging import add_request_logging_middleware, configure_logging
+from app.core.readiness import build_readiness_payload
 from app.employees.router import router as employee_router
 
 import logging
@@ -41,6 +43,11 @@ def create_app() -> FastAPI:
     @app.get("/health", tags=["health"])
     def healthcheck() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/health/ready", tags=["health"])
+    def readiness_check() -> JSONResponse:
+        payload, status_code = build_readiness_payload()
+        return JSONResponse(status_code=status_code, content=payload)
 
     return app
 

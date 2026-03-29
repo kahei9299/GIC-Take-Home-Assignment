@@ -42,6 +42,9 @@ class MemoryCacheClient:
         self.detail_versions[key] += 1
         return self.detail_versions[key]
 
+    def check_health(self) -> dict[str, str]:
+        return {"status": "ok"}
+
 
 class FailingRedis:
     """Redis stub that raises for every operation to exercise fail-open paths."""
@@ -58,11 +61,14 @@ class FailingRedis:
     def incr(self, key: str):
         raise RuntimeError("redis unavailable")
 
+    def ping(self):
+        raise RuntimeError("redis unavailable")
+
 
 def _seed_test_database(monkeypatch, migrated_engine) -> None:
     """Load the demo dataset into the migrated PostgreSQL integration database."""
 
-    monkeypatch.setenv("DATABASE_URL", str(migrated_engine.url))
+    monkeypatch.setenv("DATABASE_URL", migrated_engine.url.render_as_string(hide_password=False))
     seed_main()
 
 

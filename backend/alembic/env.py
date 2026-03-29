@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from logging.config import fileConfig
+import os
+from pathlib import Path
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-from app.core.config import get_settings
 from app.core.database import Base
 from app.models import Cafe, Employee, EmployeeAssignment
 
@@ -19,15 +20,43 @@ if config.config_file_name is not None:
 # Importing the models registers all tables on Base.metadata for autogenerate support.
 target_metadata = Base.metadata
 
+ENV_FILE = Path(__file__).resolve().parents[1] / ".env"
+
+
+def _database_url_from_dotenv() -> str | None:
+    """Read `DATABASE_URL` from the backend `.env` file without validating unrelated settings."""
+
+    if not ENV_FILE.exists():
+        return None
+
+    for line in ENV_FILE.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+
+        key, value = stripped.split("=", 1)
+        if key.strip() == "DATABASE_URL":
+            return value.strip().strip("'\"")
+
+    return None
+
 
 def get_database_url() -> str:
-    """Return the configured Alembic database URL, falling back to app settings."""
+    """Return the Alembic database URL, preferring explicit Alembic overrides first."""
 
     configured_url = config.get_main_option("sqlalchemy.url")
     if configured_url:
         return configured_url
 
-    return get_settings().database_url
+    environment_url = os.getenv("DATABASE_URL")
+    if environment_url:
+        return environment_url
+
+    dotenv_url = _database_url_from_dotenv()
+    if dotenv_url:
+        return dotenv_url
+
+    raise RuntimeError("DATABASE_URL is required for Alembic migrations.")
 
 
 def run_migrations_offline() -> None:

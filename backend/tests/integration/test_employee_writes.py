@@ -12,7 +12,7 @@ from scripts.seed import main as seed_main
 def _seed_test_database(monkeypatch, migrated_engine) -> None:
     """Load the demo dataset into the migrated PostgreSQL integration database."""
 
-    monkeypatch.setenv("DATABASE_URL", str(migrated_engine.url))
+    monkeypatch.setenv("DATABASE_URL", migrated_engine.url.render_as_string(hide_password=False))
     seed_main()
 
 

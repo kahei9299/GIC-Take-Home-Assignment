@@ -23,6 +23,9 @@ class FailingRedis:
     def incr(self, key: str) -> int:
         raise RuntimeError("redis unavailable")
 
+    def ping(self) -> bool:
+        raise RuntimeError("redis unavailable")
+
 
 def test_get_cache_client_returns_noop_when_redis_url_is_missing(monkeypatch) -> None:
     monkeypatch.setattr(
@@ -59,3 +62,9 @@ def test_redis_cache_client_version_lookups_fail_open() -> None:
     assert client.bump_list_version("cafes") == 1
     assert client.get_detail_version("employees", "UIABC1234") == 1
     assert client.bump_detail_version("employees", "UIABC1234") == 1
+
+
+def test_redis_cache_client_healthcheck_reports_degraded() -> None:
+    client = RedisCacheClient(FailingRedis(), ttl_seconds=60)
+
+    assert client.check_health() == {"status": "degraded"}

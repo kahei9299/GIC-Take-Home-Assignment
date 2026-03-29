@@ -7,8 +7,10 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.exceptions import ApplicationError
+from app.core.resilience import classify_database_dependency_error
 
 
 def _sanitize_validation_errors(errors: list[dict]) -> list[dict]:
@@ -79,6 +81,30 @@ def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(Exception)
     async def handle_unexpected_exception(request: Request, exc: Exception) -> JSONResponse:
         """Log unexpected errors and return a safe error payload."""
+
+        if isinstance(exc, SQLAlchemyError):
+            dependency_error = classify_database_dependency_error(exc)
+            if dependency_error is not None:
+                logger.warning(
+                    "Database dependency is unavailable.",
+                    extra={
+                        "event": "dependency_unavailable",
+                        "request_id": getattr(request.state, "request_id", None),
+                        "method": request.method,
+                        "path": request.url.path,
+                        "status_code": dependency_error.status_code,
+                        "error_code": dependency_error.code,
+                        "dependency": "postgres",
+                    },
+                )
+                return JSONResponse(
+                    status_code=dependency_error.status_code,
+                    content={
+                        "code": dependency_error.code,
+                        "message": dependency_error.message,
+                        "details": dependency_error.details or None,
+                    },
+                )
 
         logger.exception(
             "Unhandled exception.",

@@ -1,6 +1,6 @@
 # GIC-Take-Home-Assignment
 
-Current iteration: Increment 10, Redis read cache with fail-open fallback.
+Current iteration: Increment 11, network resilience and cloud robustness.
 
 ## What Exists
 
@@ -20,9 +20,12 @@ Current iteration: Increment 10, Redis read cache with fail-open fallback.
 - shared enums, validators, and utility helpers
 - targeted database indexes for `cafes(name)`, `employees(name)`, active `employee_assignments(cafe_id)`, and normalized cafe location filtering
 - optional Redis-backed cache client with fail-open behavior
+- bounded PostgreSQL connection, pool, and statement timeout settings
+- bounded Redis socket timeout settings and safe retry/backoff for cache/probe operations
 - cache-aside reads for cafe and employee list/detail endpoints
 - version-based cache invalidation after successful cafe and employee writes
 - `GET /health`
+- `GET /health/ready`
 - `GET /cafes`
 - `GET /cafes/{id}`
 - `GET /employees`
@@ -42,13 +45,13 @@ Current iteration: Increment 10, Redis read cache with fail-open fallback.
 - PostgreSQL-backed employee write integration tests
 - PostgreSQL-backed concurrent-write verification for uniqueness and one-active-assignment constraints
 - PostgreSQL-backed cache integration tests for cache hits, invalidation, and fail-open Redis fallback
+- readiness and resilience unit/integration tests for retry, degraded Redis, and narrow dependency `503` behavior
 - unit tests for shared error envelope handling
 - unit tests for cache disabled/fail-open behavior
 
 ## What Does Not Exist Yet
 
 - frontend app
-- resilience/readiness/liveness behavior
 - Docker setup
 - deployment config
 
@@ -64,6 +67,8 @@ backend/
       exceptions.py
       error_handlers.py
       logging.py
+      readiness.py
+      resilience.py
       request_context.py
     cafes/
       command_service.py
@@ -111,6 +116,7 @@ backend/
       test_employee_command_service.py
       test_error_handlers.py
       test_metadata.py
+      test_resilience.py
       test_utils.py
       test_validators.py
   pyproject.toml
@@ -129,19 +135,38 @@ cp backend/.env.example backend/.env
 
 ## Database Prerequisites
 
-Increment 10 uses PostgreSQL for migrations, schema tests, the demo seed script, read/write integration tests, cache integration tests, and concurrent-write verification. Runtime settings are loaded from `backend/.env`.
+Increment 11 uses PostgreSQL for migrations, schema tests, the demo seed script, read/write integration tests, cache integration tests, readiness checks, and concurrent-write verification. Runtime settings are loaded from `backend/.env`.
 
 - local backend DB: set in `backend/.env` as `DATABASE_URL`
 - schema test DB: set `TEST_DATABASE_URL` to a separate PostgreSQL database you can safely migrate and downgrade during tests
 
-Example:
+Primary Docker-first example:
 
 ```bash
 cp backend/.env.example backend/.env
-createdb -h localhost -p 5432 -U postgres gic_take_home
-createdb -h localhost -p 5432 -U postgres gic_take_home_test
-export TEST_DATABASE_URL='postgresql+psycopg://postgres:postgres@localhost:5432/gic_take_home_test'
+docker rm -f gic-postgres-test gic-redis-test 2>/dev/null
+docker run -d --name gic-postgres-test \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=cafe_manager \
+  -p 55432:5432 \
+  postgres:16-alpine
+docker run -d --name gic-redis-test -p 6379:6379 redis:7
+docker exec -it gic-postgres-test psql -U postgres -d postgres -c "CREATE DATABASE gic_take_home_test;"
 ```
+
+After copying `backend/.env.example` to `backend/.env`, verify or override these local Docker defaults:
+
+- `DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:55432/cafe_manager`
+- `REDIS_URL=redis://localhost:6379/0`
+
+Set the test database URL in your shell before running PostgreSQL-backed integration tests:
+
+```bash
+export TEST_DATABASE_URL='postgresql+psycopg://postgres:postgres@localhost:55432/gic_take_home_test'
+```
+
+Local PostgreSQL is still supported, but it is no longer the primary documented path. If you use a local server instead of Docker, make sure both `DATABASE_URL` and `TEST_DATABASE_URL` match the actual local role, password, and database names on that machine.
 
 ## Run The Backend
 
@@ -154,16 +179,28 @@ The backend reads:
 
 - `APP_NAME` from `backend/.env`
 - `DATABASE_URL` from `backend/.env`
+- `DATABASE_CONNECT_TIMEOUT_SECONDS` from `backend/.env`
+- `DATABASE_POOL_TIMEOUT_SECONDS` from `backend/.env`
+- `DATABASE_POOL_RECYCLE_SECONDS` from `backend/.env`
+- `DATABASE_POOL_SIZE` from `backend/.env`
+- `DATABASE_MAX_OVERFLOW` from `backend/.env`
+- `DATABASE_STATEMENT_TIMEOUT_MS` from `backend/.env`
 - `FRONTEND_URL` from `backend/.env`
 - `REDIS_URL` from `backend/.env` when cache is enabled
 - `CACHE_TTL_SECONDS` from `backend/.env` when cache is enabled
+- `REDIS_SOCKET_CONNECT_TIMEOUT_SECONDS` from `backend/.env` when cache is enabled
+- `REDIS_SOCKET_TIMEOUT_SECONDS` from `backend/.env` when cache is enabled
+- `REDIS_RETRY_MAX_ATTEMPTS` from `backend/.env` when cache is enabled
+- `REDIS_RETRY_BASE_DELAY_MS` from `backend/.env` when cache is enabled
+- `REDIS_RETRY_MAX_DELAY_MS` from `backend/.env` when cache is enabled
+- `READINESS_CHECK_TIMEOUT_SECONDS` from `backend/.env`
 - `LOG_LEVEL` from `backend/.env`
 - `LOG_FORMAT` from `backend/.env`
 - `TEST_DATABASE_URL` from your shell when running PostgreSQL-backed integration tests
 
 ## Backend Contract
 
-The API routes and success payloads are unchanged in Increment 10. Error responses use a stable JSON envelope:
+The API routes and success payloads are unchanged in Increment 11. Error responses use a stable JSON envelope:
 
 ```json
 {
@@ -180,16 +217,20 @@ Current status and code mapping:
 - `409` -> `CONFLICT`
 - `422` -> `VALIDATION_ERROR`
 - `500` -> `INTERNAL_SERVER_ERROR`
-- `503` -> reserved for later dependency-unavailable handling; not used yet in the delivered backend
+- `503` -> `DEPENDENCY_UNAVAILABLE` for positively identified PostgreSQL connectivity, disconnect, pool-timeout, and statement-timeout failures
 
-## Redis Cache
+Credential or database-name mistakes are not treated as dependency-unavailable outages and continue to surface as internal server errors until the configuration is corrected.
 
-Increment 10 adds Redis only as a read-performance layer.
+## Redis Cache And Resilience
+
+Increment 11 keeps Redis as a read-performance layer only.
 
 - PostgreSQL remains the source of truth for all writes and constraints
 - the backend still works when `REDIS_URL` is unset
-- if Redis operations fail, read requests bypass cache and load from PostgreSQL
+- if Redis operations fail or time out, read requests bypass cache and load from PostgreSQL
 - write requests still commit even if cache version bumps fail
+- safe Redis operations use bounded exponential backoff with jitter
+- backend write requests are never automatically retried
 - cache only stores API-ready JSON payloads for:
   - `GET /cafes`
   - `GET /cafes/{id}`
@@ -203,6 +244,32 @@ Example local Redis settings:
 ```bash
 REDIS_URL=redis://localhost:6379/0
 CACHE_TTL_SECONDS=60
+REDIS_SOCKET_CONNECT_TIMEOUT_SECONDS=0.5
+REDIS_SOCKET_TIMEOUT_SECONDS=0.5
+REDIS_RETRY_MAX_ATTEMPTS=3
+REDIS_RETRY_BASE_DELAY_MS=50
+REDIS_RETRY_MAX_DELAY_MS=500
+```
+
+## Health And Readiness
+
+- `GET /health` is the lightweight liveness endpoint and always returns `{"status":"ok"}`
+- `GET /health/ready` is the readiness endpoint
+- readiness requires PostgreSQL availability
+- Redis does not make the app unready because the service can fall back to PostgreSQL reads
+- when Redis is unavailable, readiness stays `200` and the payload marks Redis as degraded
+- when PostgreSQL is unavailable, readiness returns `503`
+
+Example readiness payload with healthy PostgreSQL and degraded Redis:
+
+```json
+{
+  "status": "ready",
+  "dependencies": {
+    "postgres": {"status": "ok"},
+    "redis": {"status": "degraded"}
+  }
+}
 ```
 
 ## Run Migrations
@@ -214,6 +281,12 @@ From the repository root:
 cd backend
 alembic upgrade head
 ```
+
+Alembic resolves the migration target database in this order:
+
+- `DATABASE_URL` from your current shell
+- `DATABASE_URL` in `backend/.env`
+- the fallback value in `backend/alembic.ini`
 
 To reset the schema back to an empty state:
 
@@ -246,7 +319,7 @@ The backend includes centralized application logging with safe defaults.
 - each HTTP response includes `X-Request-ID`
 - request logs include method, path, status code, duration, and request ID
 - handled application errors and schema-validation failures log structured metadata without request bodies
-- cache logs include hit, miss, set, bypass, failure, and version bump events
+- cache and resilience logs include hit, miss, set, bypass, failure, version bump, retry, fallback, and readiness events
 - request bodies, secrets, DB URLs, and auth headers are not logged
 
 ## Persistence Notes
@@ -271,6 +344,7 @@ Current cache versioning:
 App endpoint:
 
 - Health: `http://127.0.0.1:8000/health`
+- Readiness: `http://127.0.0.1:8000/health/ready`
 - Cafes list: `http://127.0.0.1:8000/cafes`
 - Cafe detail: `http://127.0.0.1:8000/cafes/<uuid>`
 - Create cafe: `POST http://127.0.0.1:8000/cafes`
@@ -283,7 +357,7 @@ App endpoint:
 - Update employee: `PUT http://127.0.0.1:8000/employees/<employee-id>`
 - Delete employee: `DELETE http://127.0.0.1:8000/employees/<employee-id>`
 
-Expected response:
+Expected liveness response:
 
 ```json
 {"status":"ok"}
@@ -291,13 +365,21 @@ Expected response:
 
 ## Run Tests
 
-Unit tests and health integration test:
+Unit tests and health/readiness integration tests:
 
 ```bash
 . .venv/bin/activate
 cd backend
 pytest tests/integration/test_health.py
 pytest tests/unit
+```
+
+Resilience-focused unit tests:
+
+```bash
+. .venv/bin/activate
+cd backend
+pytest tests/unit/test_resilience.py
 ```
 
 Schema verification tests against PostgreSQL:
@@ -406,21 +488,23 @@ pytest
 
 ## Current Increment
 
-Increment 10 adds Redis read caching on top of the hardened backend:
+Increment 11 adds network resilience and readiness on top of the Redis-backed backend:
 
-- cache-aside behavior for cafe and employee list/detail endpoints
-- Redis configuration with optional fail-open behavior
-- version-based post-commit invalidation tied to cafe and employee write semantics
-- cache tests for read hits, filtered keys, invalidation, and Redis failure fallback
-- README and config updates for local Redis usage
+- explicit PostgreSQL connect, pool, recycle, and statement timeout controls
+- explicit Redis socket timeout controls
+- bounded exponential backoff with jitter for safe Redis and probe operations
+- a dedicated readiness endpoint with dependency detail
+- narrow `503` dependency-unavailable handling for positively identified PostgreSQL outages only
+- resilience tests and README/config updates for degraded-mode operation
 
 ## Changes Since Previous Increment
 
-- added a cache infrastructure layer and request context propagation for structured cache logs
-- wired cache-aside reads into the cafe and employee query services without changing API routes or payloads
-- added post-commit cache invalidation to cafe and employee write paths
-- added cache-focused integration and unit tests
-- updated environment examples, package dependencies, and the README for Redis support
+- added shared retry/backoff and dependency-classification helpers
+- tightened PostgreSQL engine configuration for pool health and bounded query behavior
+- added Redis retry-aware fail-open behavior and readiness probing
+- exposed `GET /health/ready` without changing the cafe or employee API contracts
+- narrowed DB outage classification so auth/configuration mistakes do not masquerade as `503` outages
+- updated tests, env examples, and the README for Increment 11 behavior
 
 ## Notes
 
@@ -430,4 +514,5 @@ Increment 10 adds Redis read caching on top of the hardened backend:
 - Employee creation now requires an initial cafe assignment, while updates may still unassign or reassign.
 - The shared error envelope shape remains intact, while domain `400` responses are now reserved for `INVALID_OPERATION` rather than overloading `VALIDATION_ERROR`.
 - Redis is a performance layer only; it is not part of the domain model or write correctness path.
-- readiness/liveness behavior, frontend work, Docker, and deployment configuration are not implemented yet.
+- Backend write operations are not automatically retried in this increment.
+- Frontend work, Docker, and deployment configuration are not implemented yet.

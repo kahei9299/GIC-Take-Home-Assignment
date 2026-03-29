@@ -9,6 +9,8 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+import app.core.database as database_module
+from app.core.config import get_settings
 from app.core.database import SessionLocal, get_engine
 from app.models import Cafe, Employee, EmployeeAssignment
 from app.shared.enums import Gender
@@ -284,6 +286,10 @@ def print_summary(stats: dict[str, dict[str, int]]) -> None:
 def main() -> None:
     """Run the Increment 4 seed script against the configured database."""
 
+    # The seed script is called multiple times in-process during integration tests.
+    # Clear cached settings/engine first so each invocation respects the current DATABASE_URL.
+    get_settings.cache_clear()
+    database_module._engine = None
     session = SessionLocal(bind=get_engine())
     try:
         stats = seed_database(session)
