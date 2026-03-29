@@ -1,6 +1,6 @@
 # GIC-Take-Home-Assignment
 
-Current iteration: Increment 7, cafe write slice with destructive delete behavior.
+Current iteration: Increment 8, employee write slice with assignment history transitions.
 
 ## What Exists
 
@@ -14,6 +14,7 @@ Current iteration: Increment 7, cafe write slice with destructive delete behavio
 - Cafe read-side API modules for list and detail queries
 - Employee read-side API modules for list and detail queries
 - Cafe command-side API module for create, update, and delete flows
+- Employee command-side API module for create, update, and delete flows
 - Centralized JSON logging with request IDs
 - shared exception and error-handler setup
 - shared enums, validators, and utility helpers
@@ -25,17 +26,19 @@ Current iteration: Increment 7, cafe write slice with destructive delete behavio
 - `POST /cafes`
 - `PUT /cafes/{id}`
 - `DELETE /cafes/{id}`
+- `POST /employees`
+- `PUT /employees/{id}`
+- `DELETE /employees/{id}`
 - backend integration and unit tests for shared primitives
 - PostgreSQL-backed schema verification tests for the persistence layer
 - PostgreSQL-backed seed integration tests
 - PostgreSQL-backed cafe read integration tests
 - PostgreSQL-backed cafe write integration tests
 - PostgreSQL-backed employee read integration tests
+- PostgreSQL-backed employee write integration tests
 
 ## What Does Not Exist Yet
 
-- employee write APIs
-- command-side service layer for employee mutations
 - frontend app
 - Docker setup
 - deployment config
@@ -58,6 +61,7 @@ backend/
       router.py
       schemas.py
     employees/
+      command_service.py
       query_service.py
       repository.py
       router.py
@@ -83,11 +87,13 @@ backend/
       test_cafe_writes.py
       test_cafes.py
       test_employees.py
+      test_employee_writes.py
       test_health.py
       test_logging.py
       test_seed.py
       test_schema.py
     unit/
+      test_employee_command_service.py
       test_metadata.py
       test_utils.py
       test_validators.py
@@ -107,7 +113,7 @@ cp backend/.env.example backend/.env
 
 ## Database Prerequisites
 
-Increment 7 uses PostgreSQL for migrations, schema tests, the demo seed script, and the cafe and employee integration tests. Runtime settings are loaded from `backend/.env`.
+Increment 8 uses PostgreSQL for migrations, schema tests, the demo seed script, and the cafe and employee integration tests. Runtime settings are loaded from `backend/.env`.
 
 - local backend DB: set in `backend/.env` as `DATABASE_URL`
 - schema test DB: set `TEST_DATABASE_URL` to a separate PostgreSQL database you can safely migrate and downgrade during tests
@@ -190,6 +196,9 @@ App endpoint:
 - Employees list: `http://127.0.0.1:8000/employees`
 - Employees by cafe: `http://127.0.0.1:8000/employees?cafe_id=<uuid>`
 - Employee detail: `http://127.0.0.1:8000/employees/<employee-id>`
+- Create employee: `POST http://127.0.0.1:8000/employees`
+- Update employee: `PUT http://127.0.0.1:8000/employees/<employee-id>`
+- Delete employee: `DELETE http://127.0.0.1:8000/employees/<employee-id>`
 
 Expected response:
 
@@ -248,12 +257,28 @@ cd backend
 pytest tests/integration/test_employees.py
 ```
 
+Employee write integration tests against PostgreSQL:
+
+```bash
+. .venv/bin/activate
+cd backend
+pytest tests/integration/test_employee_writes.py
+```
+
 Logging and request ID integration tests:
 
 ```bash
 . .venv/bin/activate
 cd backend
 pytest tests/integration/test_logging.py
+```
+
+Employee command service unit tests:
+
+```bash
+. .venv/bin/activate
+cd backend
+pytest tests/unit/test_employee_command_service.py
 ```
 
 Run the full backend suite:
@@ -266,25 +291,26 @@ pytest
 
 ## Current Increment
 
-Increment 7 adds cafe write behavior on top of the existing read APIs:
+Increment 8 adds employee write behavior on top of the existing read APIs:
 
-- `POST /cafes` to create one cafe
-- `PUT /cafes/{id}` to replace one cafe's editable fields
-- `DELETE /cafes/{id}` with destructive behavior that removes employees currently assigned to that cafe
-- shared cafe write schemas and command service orchestration
-- PostgreSQL-backed integration tests for create, update, validation, and destructive delete flows
+- `POST /employees` with server-side employee ID generation and required initial `cafe_id`
+- `PUT /employees/{id}` with same-cafe update, reassignment, and unassignment transitions
+- `DELETE /employees/{id}` to remove one employee and their assignment history
+- shared employee write schemas and command service orchestration
+- PostgreSQL-backed integration tests and service-level unit tests for assignment transitions and ID generation
 
 ## Changes Since Previous Increment
 
-- added cafe write schemas and command service in `backend/app/cafes/`
-- wired create, update, and delete endpoints into the existing cafe router
-- added integration coverage for successful writes, validation failures, missing resources, and destructive delete behavior
-- updated the README with the new cafe write endpoints and test commands
+- added employee write schemas and command service in `backend/app/employees/`
+- wired create, update, and delete endpoints into the existing employee router
+- added integration coverage for employee creation, reassignment, unassignment, delete behavior, and conflict handling
+- added unit coverage for employee ID collision retry and assignment transition helpers
+- updated the README with the new employee write endpoints and test commands
 
 ## Notes
 
 - PostgreSQL is required for migrations, schema-sensitive integration tests, the seed script, and the cafe and employee integration tests.
 - Cafe deletion is intentionally destructive: it removes the cafe and employees currently assigned to it.
-- Employee write-side APIs still do not exist yet.
+- Employee creation now requires an initial cafe assignment, while updates may still unassign or reassign.
 - The shared error envelope remains intact, with request IDs now returned in response headers.
 - Future work will continue backend-first before any frontend implementation begins.

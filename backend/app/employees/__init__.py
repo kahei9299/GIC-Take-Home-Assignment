@@ -1,1 +1,1 @@
-"""Employee read-side package."""
+"""Employee read and write package."""
