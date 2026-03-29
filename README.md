@@ -1,6 +1,6 @@
 # GIC-Take-Home-Assignment
 
-Current iteration: Increment 6, employee read slice with production-standard logging.
+Current iteration: Increment 7, cafe write slice with destructive delete behavior.
 
 ## What Exists
 
@@ -13,6 +13,7 @@ Current iteration: Increment 6, employee read slice with production-standard log
 - Seed script for demo and test-supporting data
 - Cafe read-side API modules for list and detail queries
 - Employee read-side API modules for list and detail queries
+- Cafe command-side API module for create, update, and delete flows
 - Centralized JSON logging with request IDs
 - shared exception and error-handler setup
 - shared enums, validators, and utility helpers
@@ -21,17 +22,20 @@ Current iteration: Increment 6, employee read slice with production-standard log
 - `GET /cafes/{id}`
 - `GET /employees`
 - `GET /employees/{id}`
+- `POST /cafes`
+- `PUT /cafes/{id}`
+- `DELETE /cafes/{id}`
 - backend integration and unit tests for shared primitives
 - PostgreSQL-backed schema verification tests for the persistence layer
 - PostgreSQL-backed seed integration tests
 - PostgreSQL-backed cafe read integration tests
+- PostgreSQL-backed cafe write integration tests
 - PostgreSQL-backed employee read integration tests
 
 ## What Does Not Exist Yet
 
-- cafe write APIs
 - employee write APIs
-- command-side service layers for cafe and employee mutations
+- command-side service layer for employee mutations
 - frontend app
 - Docker setup
 - deployment config
@@ -48,6 +52,7 @@ backend/
       error_handlers.py
       logging.py
     cafes/
+      command_service.py
       query_service.py
       repository.py
       router.py
@@ -75,7 +80,9 @@ backend/
   alembic.ini
   tests/
     integration/
+      test_cafe_writes.py
       test_cafes.py
+      test_employees.py
       test_health.py
       test_logging.py
       test_seed.py
@@ -100,7 +107,7 @@ cp backend/.env.example backend/.env
 
 ## Database Prerequisites
 
-Increment 5 uses PostgreSQL for migrations, schema tests, the demo seed script, and cafe read integration tests. Runtime settings are loaded from `backend/.env`.
+Increment 7 uses PostgreSQL for migrations, schema tests, the demo seed script, and the cafe and employee integration tests. Runtime settings are loaded from `backend/.env`.
 
 - local backend DB: set in `backend/.env` as `DATABASE_URL`
 - schema test DB: set `TEST_DATABASE_URL` to a separate PostgreSQL database you can safely migrate and downgrade during tests
@@ -128,7 +135,7 @@ The backend reads:
 - `FRONTEND_URL` from `backend/.env`
 - `LOG_LEVEL` from `backend/.env`
 - `LOG_FORMAT` from `backend/.env`
-- `TEST_DATABASE_URL` from your shell when running PostgreSQL schema tests
+- `TEST_DATABASE_URL` from your shell when running PostgreSQL-backed integration tests
 
 ## Run Migrations
 
@@ -164,7 +171,7 @@ The seed script:
 
 ## Logging
 
-Increment 5 adds centralized application logging with safe defaults.
+The backend includes centralized application logging with safe defaults.
 
 - default format: JSON
 - default level: `INFO`
@@ -177,6 +184,9 @@ App endpoint:
 - Health: `http://127.0.0.1:8000/health`
 - Cafes list: `http://127.0.0.1:8000/cafes`
 - Cafe detail: `http://127.0.0.1:8000/cafes/<uuid>`
+- Create cafe: `POST http://127.0.0.1:8000/cafes`
+- Update cafe: `PUT http://127.0.0.1:8000/cafes/<uuid>`
+- Delete cafe: `DELETE http://127.0.0.1:8000/cafes/<uuid>`
 - Employees list: `http://127.0.0.1:8000/employees`
 - Employees by cafe: `http://127.0.0.1:8000/employees?cafe_id=<uuid>`
 - Employee detail: `http://127.0.0.1:8000/employees/<employee-id>`
@@ -222,6 +232,14 @@ cd backend
 pytest tests/integration/test_cafes.py
 ```
 
+Cafe write integration tests against PostgreSQL:
+
+```bash
+. .venv/bin/activate
+cd backend
+pytest tests/integration/test_cafe_writes.py
+```
+
 Employee read integration tests against PostgreSQL:
 
 ```bash
@@ -248,24 +266,25 @@ pytest
 
 ## Current Increment
 
-Increment 6 adds the employee read API slice on top of the existing backend foundation:
+Increment 7 adds cafe write behavior on top of the existing read APIs:
 
-- `GET /employees` with optional `cafe_id` filtering
-- `GET /employees/{id}` for edit-page prefill, including current cafe name and ID
-- read-side employee package with repository, query service, router, and schemas
-- employee list rows with derived `days_worked`, current cafe name, and current cafe ID
-- PostgreSQL-backed employee integration tests alongside the existing cafe and logging coverage
+- `POST /cafes` to create one cafe
+- `PUT /cafes/{id}` to replace one cafe's editable fields
+- `DELETE /cafes/{id}` with destructive behavior that removes employees currently assigned to that cafe
+- shared cafe write schemas and command service orchestration
+- PostgreSQL-backed integration tests for create, update, validation, and destructive delete flows
 
 ## Changes Since Previous Increment
 
-- added `backend/app/employees/` for read-side employee queries and response schemas
-- wired the employee router into the FastAPI app
-- added integration coverage for employee list sorting, filtering, detail responses, and unassigned behavior
-- updated the README with the new employee endpoints and test commands
+- added cafe write schemas and command service in `backend/app/cafes/`
+- wired create, update, and delete endpoints into the existing cafe router
+- added integration coverage for successful writes, validation failures, missing resources, and destructive delete behavior
+- updated the README with the new cafe write endpoints and test commands
 
 ## Notes
 
-- PostgreSQL is required for migrations, schema-sensitive integration tests, the seed script, and the cafe and employee read integration tests.
-- Write-side APIs still do not exist yet.
+- PostgreSQL is required for migrations, schema-sensitive integration tests, the seed script, and the cafe and employee integration tests.
+- Cafe deletion is intentionally destructive: it removes the cafe and employees currently assigned to it.
+- Employee write-side APIs still do not exist yet.
 - The shared error envelope remains intact, with request IDs now returned in response headers.
 - Future work will continue backend-first before any frontend implementation begins.

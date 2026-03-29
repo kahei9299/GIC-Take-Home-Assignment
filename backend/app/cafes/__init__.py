@@ -1,1 +1,1 @@
-"""Cafe read-side package for Increment 5."""
+"""Cafe read and write package."""
