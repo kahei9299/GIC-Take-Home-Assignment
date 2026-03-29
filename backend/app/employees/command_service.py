@@ -7,6 +7,7 @@ from datetime import date
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.cache import CacheClient
 from app.core.exceptions import ConflictError, NotFoundError
 from app.employees.repository import (
     create_assignment,
@@ -58,6 +59,27 @@ def _serialize_employee_from_session(session: Session, employee_id: str) -> dict
         "cafe": row["cafe"],
         "cafe_id": row["cafe_id"],
     }
+
+
+def _invalidate_employee_list(cache: CacheClient | None) -> None:
+    """Advance the employee list cache version after a successful employee write."""
+
+    if cache is not None and cache.enabled:
+        cache.bump_list_version("employees")
+
+
+def _invalidate_employee_detail(cache: CacheClient | None, employee_id: str) -> None:
+    """Advance one employee detail cache version after a successful employee write."""
+
+    if cache is not None and cache.enabled:
+        cache.bump_detail_version("employees", employee_id)
+
+
+def _invalidate_cafe_list(cache: CacheClient | None) -> None:
+    """Advance the cafe list cache version when employee assignments affect cafe counts."""
+
+    if cache is not None and cache.enabled:
+        cache.bump_list_version("cafes")
 
 
 def create_unique_employee_id(session: Session) -> str:
@@ -121,7 +143,7 @@ def _commit_or_raise_conflict(session: Session) -> None:
         raise
 
 
-def create_employee(session: Session, payload: EmployeeCreateRequest) -> dict:
+def create_employee(session: Session, payload: EmployeeCreateRequest, cache: CacheClient | None = None) -> dict:
     """Create an employee with an initial active assignment."""
 
     _require_cafe(session, payload.cafe_id)
@@ -141,30 +163,44 @@ def create_employee(session: Session, payload: EmployeeCreateRequest) -> dict:
         session.rollback()
         raise
 
+    _invalidate_employee_list(cache)
+    _invalidate_cafe_list(cache)
     return _serialize_employee_from_session(session, employee.id)
 
 
-def update_employee(session: Session, employee_id: str, payload: EmployeeWriteRequest) -> dict:
+def update_employee(session: Session, employee_id: str, payload: EmployeeWriteRequest, cache: CacheClient | None = None) -> dict:
     """Update one employee and apply any required assignment transition."""
 
     employee = fetch_employee(session, employee_id)
     if employee is None:
         raise NotFoundError("RESOURCE_NOT_FOUND", "Employee not found.")
 
+    current_assignment = fetch_active_assignment(session, employee_id)
+    previous_cafe_id = current_assignment.cafe_id if current_assignment is not None else None
     _require_cafe(session, payload.cafe_id)
     _apply_employee_fields(employee, payload)
     _apply_assignment_transition(session, employee_id, payload.cafe_id)
     _commit_or_raise_conflict(session)
 
+    _invalidate_employee_list(cache)
+    _invalidate_employee_detail(cache, employee_id)
+    if previous_cafe_id != payload.cafe_id:
+        _invalidate_cafe_list(cache)
+
     return _serialize_employee_from_session(session, employee_id)
 
 
-def delete_employee(session: Session, employee_id: str) -> None:
+def delete_employee(session: Session, employee_id: str, cache: CacheClient | None = None) -> None:
     """Delete one employee and rely on foreign-key cascades to remove assignment history."""
 
     employee = fetch_employee(session, employee_id)
     if employee is None:
         raise NotFoundError("RESOURCE_NOT_FOUND", "Employee not found.")
 
+    current_assignment = fetch_active_assignment(session, employee_id)
     session.delete(employee)
     _commit_or_raise_conflict(session)
+    _invalidate_employee_list(cache)
+    _invalidate_employee_detail(cache, employee_id)
+    if current_assignment is not None:
+        _invalidate_cafe_list(cache)

@@ -10,6 +10,7 @@ from alembic.config import Config
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 
+import app.core.cache as cache_module
 import app.core.database as database_module
 from app.core.config import get_settings
 from app.main import app
@@ -54,10 +55,13 @@ def api_client(migrated_engine, monkeypatch):
 
     monkeypatch.setenv("DATABASE_URL", str(migrated_engine.url))
     get_settings.cache_clear()
+    cache_module._cache_client = None
     database_module._engine = None
 
     try:
         yield TestClient(app)
     finally:
+        app.dependency_overrides.clear()
         get_settings.cache_clear()
+        cache_module._cache_client = None
         database_module._engine = None

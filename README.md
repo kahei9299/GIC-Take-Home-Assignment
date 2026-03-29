@@ -1,6 +1,6 @@
 # GIC-Take-Home-Assignment
 
-Current iteration: Increment 9, backend contract, correctness, and read-path index hardening.
+Current iteration: Increment 10, Redis read cache with fail-open fallback.
 
 ## What Exists
 
@@ -19,6 +19,9 @@ Current iteration: Increment 9, backend contract, correctness, and read-path ind
 - shared exception and error-handler setup with stable `400`/`404`/`409`/`422`/`500` envelope semantics
 - shared enums, validators, and utility helpers
 - targeted database indexes for `cafes(name)`, `employees(name)`, active `employee_assignments(cafe_id)`, and normalized cafe location filtering
+- optional Redis-backed cache client with fail-open behavior
+- cache-aside reads for cafe and employee list/detail endpoints
+- version-based cache invalidation after successful cafe and employee writes
 - `GET /health`
 - `GET /cafes`
 - `GET /cafes/{id}`
@@ -38,12 +41,13 @@ Current iteration: Increment 9, backend contract, correctness, and read-path ind
 - PostgreSQL-backed employee read integration tests
 - PostgreSQL-backed employee write integration tests
 - PostgreSQL-backed concurrent-write verification for uniqueness and one-active-assignment constraints
+- PostgreSQL-backed cache integration tests for cache hits, invalidation, and fail-open Redis fallback
 - unit tests for shared error envelope handling
+- unit tests for cache disabled/fail-open behavior
 
 ## What Does Not Exist Yet
 
 - frontend app
-- Redis read cache
 - resilience/readiness/liveness behavior
 - Docker setup
 - deployment config
@@ -54,11 +58,13 @@ Current iteration: Increment 9, backend contract, correctness, and read-path ind
 backend/
   app/
     core/
+      cache.py
       config.py
       database.py
       exceptions.py
       error_handlers.py
       logging.py
+      request_context.py
     cafes/
       command_service.py
       query_service.py
@@ -90,6 +96,7 @@ backend/
   alembic.ini
   tests/
     integration/
+      test_cache.py
       test_concurrency.py
       test_cafe_writes.py
       test_cafes.py
@@ -100,6 +107,7 @@ backend/
       test_seed.py
       test_schema.py
     unit/
+      test_cache.py
       test_employee_command_service.py
       test_error_handlers.py
       test_metadata.py
@@ -121,7 +129,7 @@ cp backend/.env.example backend/.env
 
 ## Database Prerequisites
 
-Increment 9 uses PostgreSQL for migrations, schema tests, the demo seed script, read/write integration tests, and concurrent-write verification. Runtime settings are loaded from `backend/.env`.
+Increment 10 uses PostgreSQL for migrations, schema tests, the demo seed script, read/write integration tests, cache integration tests, and concurrent-write verification. Runtime settings are loaded from `backend/.env`.
 
 - local backend DB: set in `backend/.env` as `DATABASE_URL`
 - schema test DB: set `TEST_DATABASE_URL` to a separate PostgreSQL database you can safely migrate and downgrade during tests
@@ -147,13 +155,15 @@ The backend reads:
 - `APP_NAME` from `backend/.env`
 - `DATABASE_URL` from `backend/.env`
 - `FRONTEND_URL` from `backend/.env`
+- `REDIS_URL` from `backend/.env` when cache is enabled
+- `CACHE_TTL_SECONDS` from `backend/.env` when cache is enabled
 - `LOG_LEVEL` from `backend/.env`
 - `LOG_FORMAT` from `backend/.env`
 - `TEST_DATABASE_URL` from your shell when running PostgreSQL-backed integration tests
 
 ## Backend Contract
 
-The API routes and success payloads are unchanged in Increment 9. Error responses use a stable JSON envelope:
+The API routes and success payloads are unchanged in Increment 10. Error responses use a stable JSON envelope:
 
 ```json
 {
@@ -171,6 +181,29 @@ Current status and code mapping:
 - `422` -> `VALIDATION_ERROR`
 - `500` -> `INTERNAL_SERVER_ERROR`
 - `503` -> reserved for later dependency-unavailable handling; not used yet in the delivered backend
+
+## Redis Cache
+
+Increment 10 adds Redis only as a read-performance layer.
+
+- PostgreSQL remains the source of truth for all writes and constraints
+- the backend still works when `REDIS_URL` is unset
+- if Redis operations fail, read requests bypass cache and load from PostgreSQL
+- write requests still commit even if cache version bumps fail
+- cache only stores API-ready JSON payloads for:
+  - `GET /cafes`
+  - `GET /cafes/{id}`
+  - `GET /employees`
+  - `GET /employees/{id}`
+- `404` responses are not cached
+- default cache TTL is controlled by `CACHE_TTL_SECONDS`
+
+Example local Redis settings:
+
+```bash
+REDIS_URL=redis://localhost:6379/0
+CACHE_TTL_SECONDS=60
+```
 
 ## Run Migrations
 
@@ -213,6 +246,7 @@ The backend includes centralized application logging with safe defaults.
 - each HTTP response includes `X-Request-ID`
 - request logs include method, path, status code, duration, and request ID
 - handled application errors and schema-validation failures log structured metadata without request bodies
+- cache logs include hit, miss, set, bypass, failure, and version bump events
 - request bodies, secrets, DB URLs, and auth headers are not logged
 
 ## Persistence Notes
@@ -226,6 +260,13 @@ Current read-path indexes:
 - `ix_employees_name` for alphabetical employee ordering support
 - `ix_employee_assignments_active_cafe_id` for active employee-by-cafe reads and destructive cafe delete lookups
 - `uq_employee_assignments_one_active_per_employee` partial unique index to enforce the one-active-assignment rule
+
+Current cache versioning:
+
+- cafes list keys vary by normalized `location`
+- employees list keys vary by `cafe_id`
+- cafe detail keys are versioned per cafe ID
+- employee detail keys are versioned per employee ID
 
 App endpoint:
 
@@ -273,6 +314,14 @@ Concurrent-write verification against PostgreSQL:
 . .venv/bin/activate
 cd backend
 pytest tests/integration/test_concurrency.py
+```
+
+Cache integration tests against PostgreSQL:
+
+```bash
+. .venv/bin/activate
+cd backend
+pytest tests/integration/test_cache.py
 ```
 
 Seed verification tests against PostgreSQL:
@@ -339,6 +388,14 @@ cd backend
 pytest tests/unit/test_error_handlers.py
 ```
 
+Cache unit tests:
+
+```bash
+. .venv/bin/activate
+cd backend
+pytest tests/unit/test_cache.py
+```
+
 Run the full backend suite:
 
 ```bash
@@ -349,21 +406,21 @@ pytest
 
 ## Current Increment
 
-Increment 9 hardens the backend contract before Redis or frontend work:
+Increment 10 adds Redis read caching on top of the hardened backend:
 
-- stable error-envelope semantics for handled domain, conflict, validation, and unexpected failures
-- refined employee write conflict mapping so constraint-driven conflicts stay accurate
-- new read-path indexes for name ordering and active assignment-by-cafe lookups
-- PostgreSQL-backed concurrent-write verification for uniqueness and one-active-assignment correctness
-- README and test coverage updates that freeze the backend baseline for later Redis and frontend increments
+- cache-aside behavior for cafe and employee list/detail endpoints
+- Redis configuration with optional fail-open behavior
+- version-based post-commit invalidation tied to cafe and employee write semantics
+- cache tests for read hits, filtered keys, invalidation, and Redis failure fallback
+- README and config updates for local Redis usage
 
 ## Changes Since Previous Increment
 
-- added a new Alembic migration for Increment 9 indexes
-- extended the shared exception taxonomy and handler behavior to make status mapping explicit
-- added unit coverage for shared error-envelope behavior and constraint-specific employee conflict mapping
-- added schema and concurrent-write tests for new indexes and Postgres-enforced correctness
-- updated the README to reflect the hardened backend contract and current test matrix
+- added a cache infrastructure layer and request context propagation for structured cache logs
+- wired cache-aside reads into the cafe and employee query services without changing API routes or payloads
+- added post-commit cache invalidation to cafe and employee write paths
+- added cache-focused integration and unit tests
+- updated environment examples, package dependencies, and the README for Redis support
 
 ## Notes
 
@@ -372,4 +429,5 @@ Increment 9 hardens the backend contract before Redis or frontend work:
 - Cafe deletion is intentionally destructive: it removes the cafe and employees currently assigned to it.
 - Employee creation now requires an initial cafe assignment, while updates may still unassign or reassign.
 - The shared error envelope shape remains intact, while domain `400` responses are now reserved for `INVALID_OPERATION` rather than overloading `VALIDATION_ERROR`.
-- Redis, readiness/liveness behavior, frontend work, Docker, and deployment configuration are not implemented yet.
+- Redis is a performance layer only; it is not part of the domain model or write correctness path.
+- readiness/liveness behavior, frontend work, Docker, and deployment configuration are not implemented yet.

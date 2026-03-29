@@ -11,6 +11,7 @@ from uuid import uuid4
 from fastapi import FastAPI, Request, Response
 
 from app.core.config import Settings
+from app.core.request_context import reset_request_id, set_request_id
 
 
 class JsonLogFormatter(logging.Formatter):
@@ -33,6 +34,9 @@ class JsonLogFormatter(logging.Formatter):
             "log_level",
             "log_format",
             "error_code",
+            "cache_status",
+            "resource_type",
+            "cache_key",
             "request_id",
             "method",
             "path",
@@ -103,24 +107,27 @@ def add_request_logging_middleware(app: FastAPI) -> None:
 
         request_id = _request_id_from_headers(request)
         request.state.request_id = request_id
+        request_context_token = set_request_id(request_id)
         start_time = perf_counter()
+        try:
+            response = await call_next(request)
 
-        response = await call_next(request)
+            duration_ms = round((perf_counter() - start_time) * 1000, 2)
+            response.headers["X-Request-ID"] = request_id
 
-        duration_ms = round((perf_counter() - start_time) * 1000, 2)
-        response.headers["X-Request-ID"] = request_id
-
-        logger.info(
-            "Request completed.",
-            extra={
-                "event": "request_completed",
-                "request_id": request_id,
-                "method": request.method,
-                "path": request.url.path,
-                "status_code": response.status_code,
-                "duration_ms": duration_ms,
-                # Keep client metadata to a minimal safe subset for debugging request flow.
-                "client_ip": request.client.host if request.client is not None else None,
-            },
-        )
-        return response
+            logger.info(
+                "Request completed.",
+                extra={
+                    "event": "request_completed",
+                    "request_id": request_id,
+                    "method": request.method,
+                    "path": request.url.path,
+                    "status_code": response.status_code,
+                    "duration_ms": duration_ms,
+                    # Keep client metadata to a minimal safe subset for debugging request flow.
+                    "client_ip": request.client.host if request.client is not None else None,
+                },
+            )
+            return response
+        finally:
+            reset_request_id(request_context_token)

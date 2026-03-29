@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     app_env: str = "development"
     database_url: str = Field(validation_alias="DATABASE_URL")
     frontend_url: str = Field(validation_alias="FRONTEND_URL")
+    redis_url: str | None = Field(default=None, validation_alias="REDIS_URL")
+    cache_ttl_seconds: int = Field(default=60, validation_alias="CACHE_TTL_SECONDS")
     log_level: str = Field(default="INFO", validation_alias="LOG_LEVEL")
     log_format: str = Field(default="json", validation_alias="LOG_FORMAT")
 
