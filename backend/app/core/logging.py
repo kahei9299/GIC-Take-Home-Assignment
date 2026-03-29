@@ -32,6 +32,7 @@ class JsonLogFormatter(logging.Formatter):
             "app_env",
             "log_level",
             "log_format",
+            "error_code",
             "request_id",
             "method",
             "path",

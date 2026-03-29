@@ -156,6 +156,34 @@ def test_post_employees_rejects_email_and_phone_conflicts(api_client, migrated_e
     }
 
 
+def test_put_employees_rejects_email_conflict(api_client, migrated_engine, monkeypatch) -> None:
+    """Verify update maps uniqueness conflicts to the shared conflict envelope."""
+
+    _seed_test_database(monkeypatch, migrated_engine)
+    with migrated_engine.begin() as connection:
+        employee_id = connection.execute(
+            text("SELECT id FROM employees WHERE email_address = 'alicia.tan@example.com'")
+        ).scalar_one()
+
+    response = api_client.put(
+        f"/employees/{employee_id}",
+        json={
+            "name": "Alicia Tan",
+            "email_address": "cheryl.ng@example.com",
+            "phone_number": "81230001",
+            "gender": "Female",
+            "cafe_id": None,
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "code": "CONFLICT",
+        "message": "Employee email address or phone number already exists.",
+        "details": None,
+    }
+
+
 def test_put_employees_same_cafe_preserves_assignment_continuity(api_client, migrated_engine, monkeypatch) -> None:
     """Verify same-cafe updates modify employee fields without replacing the active assignment row."""
 

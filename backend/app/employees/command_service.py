@@ -22,6 +22,25 @@ from app.shared.utils import calculate_days_worked
 from app.shared.validators import generate_employee_id
 
 
+def _constraint_name_from_integrity_error(exc: IntegrityError) -> str | None:
+    """Extract the underlying PostgreSQL constraint name when it is available."""
+
+    diag = getattr(getattr(exc, "orig", None), "diag", None)
+    return getattr(diag, "constraint_name", None)
+
+
+def _raise_employee_conflict(exc: IntegrityError) -> None:
+    """Map known write-side integrity failures to the stable conflict envelope."""
+
+    constraint_name = _constraint_name_from_integrity_error(exc)
+    if constraint_name in {"uq_employees_email_address", "uq_employees_phone_number"}:
+        raise ConflictError("CONFLICT", "Employee email address or phone number already exists.") from exc
+    if constraint_name == "uq_employee_assignments_one_active_per_employee":
+        raise ConflictError("CONFLICT", "Employee already has an active assignment.") from exc
+
+    raise ConflictError("CONFLICT", "Employee write conflicted with existing data.") from exc
+
+
 def _serialize_employee_from_session(session: Session, employee_id: str) -> dict:
     """Load the current employee state and map it to the write response contract."""
 
@@ -96,7 +115,7 @@ def _commit_or_raise_conflict(session: Session) -> None:
         session.commit()
     except IntegrityError as exc:
         session.rollback()
-        raise ConflictError("CONFLICT", "Employee email address or phone number already exists.") from exc
+        _raise_employee_conflict(exc)
     except Exception:
         session.rollback()
         raise
@@ -117,7 +136,7 @@ def create_employee(session: Session, payload: EmployeeCreateRequest) -> dict:
         session.commit()
     except IntegrityError as exc:
         session.rollback()
-        raise ConflictError("CONFLICT", "Employee email address or phone number already exists.") from exc
+        _raise_employee_conflict(exc)
     except Exception:
         session.rollback()
         raise

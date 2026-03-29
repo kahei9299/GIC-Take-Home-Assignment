@@ -4,6 +4,7 @@ from datetime import date
 from types import SimpleNamespace
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from app.core.exceptions import ConflictError
 from app.employees import command_service
@@ -87,15 +88,41 @@ def test_apply_assignment_transition_unassigns_without_creating_new_row(monkeypa
 
 
 def test_commit_or_raise_conflict_rolls_back_and_raises_conflict() -> None:
-    from sqlalchemy.exc import IntegrityError
-
     session = DummySession()
-    session.commit = lambda: (_ for _ in ()).throw(IntegrityError("stmt", {}, Exception("boom")))
+    session.commit = lambda: (_ for _ in ()).throw(
+        IntegrityError(
+            "stmt",
+            {},
+            SimpleNamespace(diag=SimpleNamespace(constraint_name="uq_employees_email_address")),
+        )
+    )
 
-    with pytest.raises(ConflictError):
+    with pytest.raises(ConflictError, match="Employee email address or phone number already exists"):
         command_service._commit_or_raise_conflict(session)
 
     assert session.rolled_back is True
+
+
+def test_raise_employee_conflict_maps_active_assignment_constraint() -> None:
+    exc = IntegrityError(
+        "stmt",
+        {},
+        SimpleNamespace(diag=SimpleNamespace(constraint_name="uq_employee_assignments_one_active_per_employee")),
+    )
+
+    with pytest.raises(ConflictError, match="Employee already has an active assignment"):
+        command_service._raise_employee_conflict(exc)
+
+
+def test_raise_employee_conflict_falls_back_to_generic_message() -> None:
+    exc = IntegrityError(
+        "stmt",
+        {},
+        SimpleNamespace(diag=SimpleNamespace(constraint_name="some_other_constraint")),
+    )
+
+    with pytest.raises(ConflictError, match="Employee write conflicted with existing data"):
+        command_service._raise_employee_conflict(exc)
 
 
 def test_employee_write_request_trims_name_and_validates_fields() -> None:

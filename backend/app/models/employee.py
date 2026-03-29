@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import Enum, String, UniqueConstraint
+from sqlalchemy import Enum, Index, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -14,6 +14,7 @@ class Employee(Base):
 
     __tablename__ = "employees"
     __table_args__ = (
+        Index("ix_employees_name", "name"),
         UniqueConstraint("email_address", name="uq_employees_email_address"),
         UniqueConstraint("phone_number", name="uq_employees_phone_number"),
     )

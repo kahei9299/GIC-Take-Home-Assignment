@@ -1,3 +1,7 @@
+"""Centralized API error handling for domain, validation, and unexpected failures."""
+
+from __future__ import annotations
+
 import logging
 
 from fastapi import FastAPI, Request
@@ -18,17 +22,29 @@ def _sanitize_validation_errors(errors: list[dict]) -> list[dict]:
 
 
 def register_exception_handlers(app: FastAPI) -> None:
+    """Register shared exception-to-response mappings for the FastAPI app."""
+
     logger = logging.getLogger("app.error")
 
     @app.exception_handler(ApplicationError)
-    async def handle_application_error(_: Request, exc: ApplicationError) -> JSONResponse:
-        status_code = {
-            "RESOURCE_NOT_FOUND": 404,
-            "CONFLICT": 409,
-            "VALIDATION_ERROR": 400,
-        }.get(exc.code, 400)
+    async def handle_application_error(request: Request, exc: ApplicationError) -> JSONResponse:
+        """Map known application errors to the stable JSON error envelope."""
+
+        if exc.status_code >= 400:
+            logger.warning(
+                "Handled application error.",
+                extra={
+                    "event": "handled_application_error",
+                    "request_id": getattr(request.state, "request_id", None),
+                    "method": request.method,
+                    "path": request.url.path,
+                    "status_code": exc.status_code,
+                    "error_code": exc.code,
+                },
+            )
+
         return JSONResponse(
-            status_code=status_code,
+            status_code=exc.status_code,
             content={
                 "code": exc.code,
                 "message": exc.message,
@@ -38,9 +54,19 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(RequestValidationError)
     async def handle_request_validation_error(
-        _: Request,
+        request: Request,
         exc: RequestValidationError,
     ) -> JSONResponse:
+        logger.warning(
+            "Request validation failed.",
+            extra={
+                "event": "request_validation_failed",
+                "request_id": getattr(request.state, "request_id", None),
+                "method": request.method,
+                "path": request.url.path,
+                "status_code": 422,
+            },
+        )
         return JSONResponse(
             status_code=422,
             content={

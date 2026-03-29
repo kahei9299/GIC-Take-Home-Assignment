@@ -201,3 +201,26 @@ def test_employee_assignments_reject_invalid_date_ranges(migrated_engine) -> Non
                     "end_date": date(2026, 3, 20),
                 },
             )
+
+
+def test_increment_9_indexes_exist_on_hardened_read_paths(migrated_engine) -> None:
+    """Verify Increment 9 creates the intended read-path indexes."""
+
+    with migrated_engine.begin() as connection:
+        rows = connection.execute(
+            text(
+                """
+                SELECT indexname, indexdef
+                FROM pg_indexes
+                WHERE schemaname = 'public'
+                  AND tablename IN ('cafes', 'employees', 'employee_assignments')
+                """
+            )
+        ).mappings().all()
+
+    indexes = {row["indexname"]: row["indexdef"] for row in rows}
+
+    assert "ix_cafes_name" in indexes
+    assert "ix_employees_name" in indexes
+    assert "ix_employee_assignments_active_cafe_id" in indexes
+    assert "WHERE (end_date IS NULL)" in indexes["ix_employee_assignments_active_cafe_id"]

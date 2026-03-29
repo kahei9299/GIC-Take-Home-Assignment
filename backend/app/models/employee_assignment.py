@@ -24,6 +24,12 @@ class EmployeeAssignment(Base):
             unique=True,
             postgresql_where=text("end_date IS NULL"),
         ),
+        # Filtering current employees by cafe should only scan active assignment rows.
+        Index(
+            "ix_employee_assignments_active_cafe_id",
+            "cafe_id",
+            postgresql_where=text("end_date IS NULL"),
+        ),
         # Closed assignments must not end before they start.
         CheckConstraint(
             "end_date IS NULL OR end_date >= start_date",
