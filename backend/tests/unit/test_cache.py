@@ -11,6 +11,11 @@ from app.core.cache import NoOpCacheClient, RedisCacheClient, get_cache_client
 class FailingRedis:
     """Minimal Redis stub that raises for every operation."""
 
+    def __init__(self) -> None:
+        self.closed = False
+        self.pool_disconnected = False
+        self.connection_pool = self
+
     def get(self, key: str) -> str | None:
         raise RuntimeError("redis unavailable")
 
@@ -25,6 +30,12 @@ class FailingRedis:
 
     def ping(self) -> bool:
         raise RuntimeError("redis unavailable")
+
+    def close(self) -> None:
+        self.closed = True
+
+    def disconnect(self) -> None:
+        self.pool_disconnected = True
 
 
 def test_get_cache_client_returns_noop_when_redis_url_is_missing(monkeypatch) -> None:
@@ -68,3 +79,27 @@ def test_redis_cache_client_healthcheck_reports_degraded() -> None:
     client = RedisCacheClient(FailingRedis(), ttl_seconds=60)
 
     assert client.check_health() == {"status": "degraded"}
+
+
+def test_redis_cache_client_close_releases_redis_resources() -> None:
+    redis_client = FailingRedis()
+    client = RedisCacheClient(redis_client, ttl_seconds=60)
+
+    client.close()
+
+    assert redis_client.closed is True
+    assert redis_client.pool_disconnected is True
+
+
+def test_close_cache_client_resets_shared_singleton(monkeypatch) -> None:
+    redis_client = FailingRedis()
+    cache_module._cache_client = RedisCacheClient(redis_client, ttl_seconds=60)
+
+    try:
+        cache_module.close_cache_client()
+    finally:
+        cache_module._cache_client = None
+
+    assert redis_client.closed is True
+    assert redis_client.pool_disconnected is True
+    assert cache_module._cache_client is None

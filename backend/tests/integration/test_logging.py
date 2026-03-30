@@ -80,9 +80,10 @@ def test_missing_route_still_returns_request_id_header_and_logs_request(monkeypa
 
 
 def test_create_app_emits_startup_log(capsys) -> None:
-    """Verify app creation emits the structured startup log record."""
+    """Verify app startup emits the structured startup log record."""
 
-    create_app()
+    with TestClient(create_app()):
+        pass
 
     captured = capsys.readouterr()
     log_lines = [line for line in (captured.out + captured.err).splitlines() if line.startswith("{")]
@@ -91,3 +92,17 @@ def test_create_app_emits_startup_log(capsys) -> None:
     assert startup_entry["app_name"] == "gic-take-home-backend"
     assert startup_entry["log_format"] == "json"
     assert startup_entry["log_level"] == "INFO"
+
+
+def test_create_app_emits_shutdown_log(capsys) -> None:
+    """Verify app shutdown emits the structured shutdown log record."""
+
+    with TestClient(create_app()):
+        pass
+
+    captured = capsys.readouterr()
+    log_lines = [line for line in (captured.out + captured.err).splitlines() if line.startswith("{")]
+    shutdown_entry = next(json.loads(line) for line in log_lines if '"event": "app_shutdown"' in line)
+
+    assert shutdown_entry["app_name"] == "gic-take-home-backend"
+    assert shutdown_entry["app_env"] == "development"

@@ -48,6 +48,9 @@ class CacheClient(Protocol):
     def check_health(self) -> dict[str, str]:
         """Return the cache dependency health summary used by readiness checks."""
 
+    def close(self) -> None:
+        """Release cache resources during application shutdown."""
+
 
 def list_version_key(namespace: str) -> str:
     """Return the Redis key storing the current list version token."""
@@ -86,6 +89,9 @@ class NoOpCacheClient:
 
     def check_health(self) -> dict[str, str]:
         return {"status": "disabled"}
+
+    def close(self) -> None:
+        return None
 
 
 class RedisCacheClient:
@@ -313,6 +319,12 @@ class RedisCacheClient:
 
         return {"status": "ok"}
 
+    def close(self) -> None:
+        """Close Redis client resources during managed-runtime shutdown."""
+
+        self._redis.close()
+        self._redis.connection_pool.disconnect()
+
 
 _cache_client: CacheClient | None = None
 
@@ -340,3 +352,13 @@ def get_cache_client() -> CacheClient:
         _cache_client = RedisCacheClient(redis_client=redis_client, ttl_seconds=settings.cache_ttl_seconds)
 
     return _cache_client
+
+
+def close_cache_client() -> None:
+    """Close and clear the shared cache client during application shutdown."""
+
+    global _cache_client
+
+    if _cache_client is not None:
+        _cache_client.close()
+        _cache_client = None

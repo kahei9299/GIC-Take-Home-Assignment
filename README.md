@@ -1,6 +1,6 @@
 # GIC-Take-Home-Assignment
 
-Current iteration: Increment 11, network resilience and cloud robustness.
+Current iteration: Increment 12, hosted-runtime hardening for Railway/Vercel.
 
 ## What Exists
 
@@ -24,6 +24,9 @@ Current iteration: Increment 11, network resilience and cloud robustness.
 - bounded Redis socket timeout settings and safe retry/backoff for cache/probe operations
 - cache-aside reads for cafe and employee list/detail endpoints
 - version-based cache invalidation after successful cafe and employee writes
+- readiness probe timeout isolation that does not leak into normal pooled request traffic
+- FastAPI lifespan-managed startup/shutdown logging and backend resource cleanup
+- exact-origin CORS allowlisting via `CORS_ALLOWED_ORIGINS` with temporary `FRONTEND_URL` fallback
 - `GET /health`
 - `GET /health/ready`
 - `GET /cafes`
@@ -46,6 +49,7 @@ Current iteration: Increment 11, network resilience and cloud robustness.
 - PostgreSQL-backed concurrent-write verification for uniqueness and one-active-assignment constraints
 - PostgreSQL-backed cache integration tests for cache hits, invalidation, and fail-open Redis fallback
 - readiness and resilience unit/integration tests for retry, degraded Redis, and narrow dependency `503` behavior
+- hosted-runtime unit/integration tests for CORS config, startup/shutdown lifecycle, cache shutdown, and readiness timeout scoping
 - unit tests for shared error envelope handling
 - unit tests for cache disabled/fail-open behavior
 
@@ -109,10 +113,13 @@ backend/
       test_employee_writes.py
       test_health.py
       test_logging.py
+      test_runtime_hardening.py
       test_seed.py
       test_schema.py
     unit/
       test_cache.py
+      test_config.py
+      test_database.py
       test_employee_command_service.py
       test_error_handlers.py
       test_metadata.py
@@ -135,7 +142,7 @@ cp backend/.env.example backend/.env
 
 ## Database Prerequisites
 
-Increment 11 uses PostgreSQL for migrations, schema tests, the demo seed script, read/write integration tests, cache integration tests, readiness checks, and concurrent-write verification. Runtime settings are loaded from `backend/.env`.
+Increment 12 uses PostgreSQL for migrations, schema tests, the demo seed script, read/write integration tests, cache integration tests, readiness checks, and concurrent-write verification. Runtime settings are loaded from `backend/.env`.
 
 - local backend DB: set in `backend/.env` as `DATABASE_URL`
 - schema test DB: set `TEST_DATABASE_URL` to a separate PostgreSQL database you can safely migrate and downgrade during tests
@@ -179,13 +186,14 @@ The backend reads:
 
 - `APP_NAME` from `backend/.env`
 - `DATABASE_URL` from `backend/.env`
+- `CORS_ALLOWED_ORIGINS` from `backend/.env`
 - `DATABASE_CONNECT_TIMEOUT_SECONDS` from `backend/.env`
 - `DATABASE_POOL_TIMEOUT_SECONDS` from `backend/.env`
 - `DATABASE_POOL_RECYCLE_SECONDS` from `backend/.env`
 - `DATABASE_POOL_SIZE` from `backend/.env`
 - `DATABASE_MAX_OVERFLOW` from `backend/.env`
 - `DATABASE_STATEMENT_TIMEOUT_MS` from `backend/.env`
-- `FRONTEND_URL` from `backend/.env`
+- `FRONTEND_URL` from `backend/.env` as a temporary fallback when `CORS_ALLOWED_ORIGINS` is unset
 - `REDIS_URL` from `backend/.env` when cache is enabled
 - `CACHE_TTL_SECONDS` from `backend/.env` when cache is enabled
 - `REDIS_SOCKET_CONNECT_TIMEOUT_SECONDS` from `backend/.env` when cache is enabled
@@ -200,7 +208,7 @@ The backend reads:
 
 ## Backend Contract
 
-The API routes and success payloads are unchanged in Increment 11. Error responses use a stable JSON envelope:
+The API routes and success payloads are unchanged in Increment 12. Error responses use a stable JSON envelope:
 
 ```json
 {
@@ -223,7 +231,7 @@ Credential or database-name mistakes are not treated as dependency-unavailable o
 
 ## Redis Cache And Resilience
 
-Increment 11 keeps Redis as a read-performance layer only.
+Increment 12 keeps Redis as a read-performance layer only.
 
 - PostgreSQL remains the source of truth for all writes and constraints
 - the backend still works when `REDIS_URL` is unset
@@ -258,7 +266,52 @@ REDIS_RETRY_MAX_DELAY_MS=500
 - readiness requires PostgreSQL availability
 - Redis does not make the app unready because the service can fall back to PostgreSQL reads
 - when Redis is unavailable, readiness stays `200` and the payload marks Redis as degraded
-- when PostgreSQL is unavailable, readiness returns `503`
+- startup follows a managed-runtime-friendly `start, stay unready` model:
+  - the process can boot even when PostgreSQL is temporarily unavailable
+  - `/health` still reports the process as live
+  - `/health/ready` stays `503` until PostgreSQL becomes reachable
+- the readiness probe scopes its timeout to the probe transaction only, so request traffic keeps the configured normal statement timeout
+- app startup and shutdown are logged through FastAPI lifespan hooks
+- backend shutdown explicitly disposes the shared SQLAlchemy engine and closes the shared Redis client when one was created
+
+For Railway deployments, use `GET /health/ready` as the service healthcheck endpoint rather than `GET /health`.
+
+## CORS Configuration
+
+Increment 12 replaces the single-origin local-only assumption with an exact-origin allowlist.
+
+- prefer `CORS_ALLOWED_ORIGINS` as a comma-separated list of explicit frontend origins
+- `FRONTEND_URL` still works as a temporary fallback for older local setups
+- if both are set, `CORS_ALLOWED_ORIGINS` takes precedence
+- preview domains should be added explicitly rather than allowed with a broad regex
+
+Example:
+
+```bash
+CORS_ALLOWED_ORIGINS=http://localhost:5173,https://staging-frontend.example.com,https://app.example.com
+```
+
+## What Still Does Not Exist
+
+- frontend app
+- Docker setup
+- deployment config
+
+## How To Test Increment 12
+
+From the repository root after activating your virtual environment:
+
+```bash
+cd backend
+pytest tests/unit/test_config.py tests/unit/test_database.py tests/unit/test_cache.py tests/integration/test_logging.py tests/integration/test_runtime_hardening.py tests/integration/test_health.py
+```
+
+To run the full backend test suite:
+
+```bash
+cd backend
+pytest
+```
 
 Example readiness payload with healthy PostgreSQL and degraded Redis:
 

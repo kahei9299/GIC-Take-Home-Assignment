@@ -63,17 +63,33 @@ def get_db_session() -> Generator[Session, None, None]:
         session.close()
 
 
+def dispose_engine() -> None:
+    """Dispose the shared SQLAlchemy engine when the process is shutting down."""
+
+    global _engine
+
+    if _engine is not None:
+        _engine.dispose()
+        _engine = None
+
+
 def check_database_readiness(timeout_seconds: float | None = None) -> None:
     """Raise when PostgreSQL cannot be reached within the readiness timeout budget."""
 
     settings = get_settings()
     timeout_ms = int((timeout_seconds or settings.readiness_check_timeout_seconds) * 1000)
+    engine = get_engine()
 
     try:
-        with get_engine().connect() as connection:
-            if get_engine().dialect.name == "postgresql":
-                connection.exec_driver_sql(f"SET statement_timeout = {timeout_ms}")
-            connection.execute(text("SELECT 1"))
+        with engine.connect() as connection:
+            if engine.dialect.name == "postgresql":
+                # Scope the readiness timeout to this probe transaction so pooled
+                # request connections keep their normal statement timeout.
+                with connection.begin():
+                    connection.exec_driver_sql(f"SET LOCAL statement_timeout = {timeout_ms}")
+                    connection.execute(text("SELECT 1"))
+            else:
+                connection.execute(text("SELECT 1"))
     except SQLAlchemyError as exc:
         dependency_error = classify_database_dependency_error(exc)
         if dependency_error is not None:

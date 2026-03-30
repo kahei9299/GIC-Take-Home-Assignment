@@ -2,6 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from pydantic import Field
+from pydantic import computed_field
 from pydantic import ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -14,7 +15,8 @@ class Settings(BaseSettings):
     app_name: str = Field(default="gic-take-home-backend", validation_alias="APP_NAME")
     app_env: str = "development"
     database_url: str = Field(validation_alias="DATABASE_URL")
-    frontend_url: str = Field(validation_alias="FRONTEND_URL")
+    frontend_url: str | None = Field(default=None, validation_alias="FRONTEND_URL")
+    cors_allowed_origins: str | None = Field(default=None, validation_alias="CORS_ALLOWED_ORIGINS")
     database_connect_timeout_seconds: int = Field(default=5, validation_alias="DATABASE_CONNECT_TIMEOUT_SECONDS")
     database_pool_timeout_seconds: int = Field(default=5, validation_alias="DATABASE_POOL_TIMEOUT_SECONDS")
     database_pool_recycle_seconds: int = Field(default=1800, validation_alias="DATABASE_POOL_RECYCLE_SECONDS")
@@ -40,6 +42,14 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @computed_field
+    @property
+    def allowed_cors_origins(self) -> list[str]:
+        """Return the exact frontend origins allowed to call the backend."""
+
+        raw_origins = self.cors_allowed_origins or self.frontend_url or ""
+        return [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
 
 
 @lru_cache

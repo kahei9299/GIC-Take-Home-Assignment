@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from urllib.parse import urlparse, urlunparse
 
 import pytest
@@ -15,6 +16,9 @@ import app.core.cache as cache_module
 import app.core.database as database_module
 from app.core.config import get_settings
 from app.main import app
+
+
+BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _render_engine_url(engine) -> str:
@@ -46,7 +50,8 @@ def _test_redis_url() -> str | None:
 def _alembic_config(database_url: str) -> Config:
     """Build an Alembic config pointed at the integration test database."""
 
-    config = Config("alembic.ini")
+    config = Config(str(BACKEND_ROOT / "alembic.ini"))
+    config.set_main_option("script_location", str(BACKEND_ROOT / "alembic"))
     config.set_main_option("sqlalchemy.url", database_url)
     return config
 
