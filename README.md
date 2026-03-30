@@ -1,6 +1,6 @@
 # GIC-Take-Home-Assignment
 
-Current iteration: Increment 12, hosted-runtime hardening for Railway/Vercel.
+Current iteration: Increment 13, frontend foundation.
 
 ## What Exists
 
@@ -52,10 +52,16 @@ Current iteration: Increment 12, hosted-runtime hardening for Railway/Vercel.
 - hosted-runtime unit/integration tests for CORS config, startup/shutdown lifecycle, cache shutdown, and readiness timeout scoping
 - unit tests for shared error envelope handling
 - unit tests for cache disabled/fail-open behavior
+- `frontend/` React + Vite + TypeScript app scaffold
+- React Router app shell and route placeholders for cafes and employees
+- TanStack Query provider with safe-read retry defaults
+- Ant Design theme baseline and AG Grid foundation preview
+- handwritten frontend API client layered on checked-in OpenAPI-generated types
+- frontend env examples for local, preview, and production backend targeting
+- frontend Vitest + Testing Library + MSW foundation tests
 
 ## What Does Not Exist Yet
 
-- frontend app
 - Docker setup
 - deployment config
 
@@ -129,6 +135,53 @@ backend/
   pyproject.toml
 ```
 
+## Frontend Structure
+
+```text
+frontend/
+  scripts/
+    generate-openapi-types.mjs
+  src/
+    api/
+      client.ts
+      contracts.ts
+      generated/
+        openapi.ts
+      http.ts
+    app/
+      App.tsx
+      AppProviders.tsx
+      env.ts
+      queryClient.ts
+      router.tsx
+    components/
+      feedback/
+        QueryState.tsx
+      grid/
+        defaultGridOptions.ts
+        GridFoundationPreview.tsx
+        registerGridModules.ts
+      layout/
+        AppShell.tsx
+        PageFrame.tsx
+    routes/
+      cafes/
+      employees/
+      shared/
+    test/
+      app.test.tsx
+      renderApp.tsx
+      server.ts
+      setup.ts
+  .env.example
+  .env.preview.example
+  .env.production.example
+  index.html
+  package.json
+  tsconfig.json
+  vite.config.ts
+```
+
 ## Setup
 
 From the repository root:
@@ -138,6 +191,8 @@ python3 -m venv .venv
 . .venv/bin/activate
 pip install -e './backend[dev]'
 cp backend/.env.example backend/.env
+cd frontend
+pnpm install
 ```
 
 ## Database Prerequisites
@@ -182,6 +237,28 @@ cd backend
 uvicorn app.main:app --reload
 ```
 
+## Run The Frontend
+
+From the repository root:
+
+```bash
+cd frontend
+cp .env.example .env.local
+pnpm dev
+```
+
+The frontend expects `VITE_API_BASE_URL` and defaults to these env-file conventions:
+
+- local development: `frontend/.env.local`
+- Vercel preview: `frontend/.env.preview.example` -> `VITE_API_BASE_URL=<staging backend URL>`
+- Vercel production: `frontend/.env.production.example` -> `VITE_API_BASE_URL=<production backend URL>`
+
+Default local value:
+
+```bash
+VITE_API_BASE_URL=http://localhost:8000
+```
+
 The backend reads:
 
 - `APP_NAME` from `backend/.env`
@@ -208,7 +285,7 @@ The backend reads:
 
 ## Backend Contract
 
-The API routes and success payloads are unchanged in Increment 12. Error responses use a stable JSON envelope:
+The API routes and success payloads remain the source of truth in Increment 13. The frontend consumes checked-in TypeScript types generated from `backend/openapi.json`, while keeping request helpers handwritten. Error responses use a stable JSON envelope:
 
 ```json
 {
@@ -228,6 +305,21 @@ Current status and code mapping:
 - `503` -> `DEPENDENCY_UNAVAILABLE` for positively identified PostgreSQL connectivity, disconnect, pool-timeout, and statement-timeout failures
 
 Credential or database-name mistakes are not treated as dependency-unavailable outages and continue to surface as internal server errors until the configuration is corrected.
+
+## Frontend Contract Consumption
+
+- `backend/openapi.json` is the checked-in backend contract snapshot for the frontend
+- `frontend/src/api/generated/openapi.ts` is generated from that snapshot
+- regenerate frontend contract types after backend schema changes with:
+
+```bash
+cd frontend
+pnpm generate:api
+```
+
+- the frontend only retries safe `GET` reads by default
+- frontend mutations do not auto-retry
+- preview deployments should point to the staging backend through `VITE_API_BASE_URL`, not by editing source code
 
 ## Redis Cache And Resilience
 
@@ -293,17 +385,19 @@ CORS_ALLOWED_ORIGINS=http://localhost:5173,https://staging-frontend.example.com,
 
 ## What Still Does Not Exist
 
-- frontend app
 - Docker setup
 - deployment config
 
-## How To Test Increment 12
+## How To Test Increment 13
 
 From the repository root after activating your virtual environment:
 
 ```bash
 cd backend
 pytest tests/unit/test_config.py tests/unit/test_database.py tests/unit/test_cache.py tests/integration/test_logging.py tests/integration/test_runtime_hardening.py tests/integration/test_health.py
+cd ../frontend
+pnpm test
+pnpm build
 ```
 
 To run the full backend test suite:
@@ -417,6 +511,20 @@ Expected liveness response:
 ```
 
 ## Run Tests
+
+Frontend foundation tests:
+
+```bash
+cd frontend
+pnpm test
+```
+
+Frontend production build check:
+
+```bash
+cd frontend
+pnpm build
+```
 
 Unit tests and health/readiness integration tests:
 
@@ -568,4 +676,4 @@ Increment 11 adds network resilience and readiness on top of the Redis-backed ba
 - The shared error envelope shape remains intact, while domain `400` responses are now reserved for `INVALID_OPERATION` rather than overloading `VALIDATION_ERROR`.
 - Redis is a performance layer only; it is not part of the domain model or write correctness path.
 - Backend write operations are not automatically retried in this increment.
-- Frontend work, Docker, and deployment configuration are not implemented yet.
+- Docker and deployment configuration are not implemented yet.
