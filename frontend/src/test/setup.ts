@@ -19,6 +19,37 @@ Object.defineProperty(window, "matchMedia", {
   }),
 });
 
+// React Router's memory navigation creates requests that should share the same
+// AbortSignal implementation as Node's fetch/undici in the test environment.
+Object.defineProperty(window, "AbortController", {
+  writable: true,
+  value: globalThis.AbortController,
+});
+
+Object.defineProperty(window, "AbortSignal", {
+  writable: true,
+  value: globalThis.AbortSignal,
+});
+
+const NativeRequest = globalThis.Request;
+
+class RequestMock extends NativeRequest {
+  constructor(input: ConstructorParameters<typeof NativeRequest>[0], init?: ConstructorParameters<typeof NativeRequest>[1]) {
+    const normalizedInit =
+      init && init.signal && !(init.signal instanceof globalThis.AbortSignal)
+        ? { ...init, signal: undefined }
+        : init;
+
+    super(input, normalizedInit);
+  }
+}
+
+vi.stubGlobal("Request", RequestMock);
+Object.defineProperty(window, "Request", {
+  writable: true,
+  value: RequestMock,
+});
+
 class ResizeObserverMock {
   observe() {}
 

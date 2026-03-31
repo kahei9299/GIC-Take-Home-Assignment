@@ -4,6 +4,8 @@ import { Button, Result, Skeleton, Space, Typography } from "antd";
 
 type QueryStateProps = {
   isPending?: boolean;
+  pendingTitle?: string;
+  pendingDescription?: string;
   isError?: boolean;
   errorTitle?: string;
   errorDescription?: string;
@@ -11,11 +13,14 @@ type QueryStateProps = {
   empty?: boolean;
   emptyTitle?: string;
   emptyDescription?: string;
+  emptyExtra?: ReactNode;
   children?: ReactNode;
 };
 
 export function QueryState({
   isPending,
+  pendingTitle = "Loading",
+  pendingDescription = "Fetching the latest safe-read data from the backend.",
   isError,
   errorTitle = "Unable to load data",
   errorDescription = "The backend did not complete this safe read. Retry when the service is reachable again.",
@@ -23,10 +28,21 @@ export function QueryState({
   empty,
   emptyTitle = "Nothing to show yet",
   emptyDescription = "This route foundation is ready, but the feature slice has not been implemented yet.",
+  emptyExtra,
   children,
 }: QueryStateProps) {
   if (isPending) {
-    return <Skeleton active paragraph={{ rows: 4 }} />;
+    return (
+      <Space direction="vertical" size={12} style={{ width: "100%" }}>
+        <div>
+          <Typography.Title level={4} style={{ marginBottom: 0 }}>
+            {pendingTitle}
+          </Typography.Title>
+          <Typography.Paragraph style={{ marginBottom: 0 }}>{pendingDescription}</Typography.Paragraph>
+        </div>
+        <Skeleton active paragraph={{ rows: 4 }} />
+      </Space>
+    );
   }
 
   if (isError) {
@@ -53,6 +69,7 @@ export function QueryState({
           {emptyTitle}
         </Typography.Title>
         <Typography.Paragraph style={{ marginBottom: 0 }}>{emptyDescription}</Typography.Paragraph>
+        {emptyExtra}
       </Space>
     );
   }

@@ -12,7 +12,7 @@ export function EmployeeListRoute() {
     >
       <FeaturePlaceholderCard
         title="Employee list foundation"
-        summary="Increment 15 will add the employee grid, deep-link filtering, and assignment-aware action flows on top of this route scaffold."
+        summary="Increment 18 will add the employee grid, deep-link filtering, and assignment-aware action flows on top of this route scaffold."
         primaryActionLabel="Open employee create route"
         primaryActionTo="/employees/new"
       />

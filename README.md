@@ -1,6 +1,6 @@
 # GIC-Take-Home-Assignment
 
-Current iteration: Increment 13, frontend foundation.
+Current iteration: Increment 14, cafe list page.
 
 ## What Exists
 
@@ -53,12 +53,12 @@ Current iteration: Increment 13, frontend foundation.
 - unit tests for shared error envelope handling
 - unit tests for cache disabled/fail-open behavior
 - `frontend/` React + Vite + TypeScript app scaffold
-- React Router app shell and route placeholders for cafes and employees
+- React Router app shell with a live cafe list route and placeholder employee/create/edit routes
 - TanStack Query provider with safe-read retry defaults
-- Ant Design theme baseline and AG Grid foundation preview
+- Ant Design theme baseline and AG Grid-backed cafe list page
 - handwritten frontend API client layered on checked-in OpenAPI-generated types
 - frontend env examples for local, preview, and production backend targeting
-- frontend Vitest + Testing Library + MSW foundation tests
+- frontend Vitest + Testing Library + MSW coverage for core cafe list flows and retry states
 
 ## What Does Not Exist Yet
 
@@ -259,6 +259,13 @@ Default local value:
 VITE_API_BASE_URL=http://localhost:8000
 ```
 
+Increment 14 uses the backend as the source of truth for cafe filtering:
+
+- the cafe list page lives at `/cafes`
+- the location filter is local UI state and is committed explicitly with `Apply`
+- the frontend does not apply business filtering locally after the backend responds
+- positive employee counts deep-link to `/employees?cafe_id=<uuid>`
+
 The backend reads:
 
 - `APP_NAME` from `backend/.env`
@@ -285,7 +292,7 @@ The backend reads:
 
 ## Backend Contract
 
-The API routes and success payloads remain the source of truth in Increment 13. The frontend consumes checked-in TypeScript types generated from `backend/openapi.json`, while keeping request helpers handwritten. Error responses use a stable JSON envelope:
+The API routes and success payloads remain the source of truth in Increment 14. The frontend consumes checked-in TypeScript types generated from `backend/openapi.json`, while keeping request helpers handwritten. Error responses use a stable JSON envelope:
 
 ```json
 {
@@ -388,7 +395,7 @@ CORS_ALLOWED_ORIGINS=http://localhost:5173,https://staging-frontend.example.com,
 - Docker setup
 - deployment config
 
-## How To Test Increment 13
+## How To Test Increment 14
 
 From the repository root after activating your virtual environment:
 
@@ -399,6 +406,15 @@ cd ../frontend
 pnpm test
 pnpm build
 ```
+
+Frontend coverage in this increment includes:
+
+- cafe list render against backend-backed MSW responses
+- explicit location filtering through the backend
+- clear/reset local filter behavior
+- retryable safe-read failure and recovery
+- employee-count deep-link rendering
+- add/edit route navigation from the list page
 
 To run the full backend test suite:
 
@@ -509,6 +525,82 @@ Expected liveness response:
 ```json
 {"status":"ok"}
 ```
+
+## End-To-End Local Verification
+
+Use this flow when you want to verify the current delivered system end to end instead of only running isolated test suites.
+
+1. Start local PostgreSQL and Redis:
+
+```bash
+docker rm -f gic-postgres-test gic-redis-test 2>/dev/null
+docker run -d --name gic-postgres-test \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=cafe_manager \
+  -p 55432:5432 \
+  postgres:16-alpine
+docker run -d --name gic-redis-test -p 6379:6379 redis:7
+docker exec -it gic-postgres-test psql -U postgres -d postgres -c "CREATE DATABASE gic_take_home_test;"
+```
+
+2. Activate the virtual environment and export the integration-test database:
+
+```bash
+. .venv/bin/activate
+export TEST_DATABASE_URL='postgresql+psycopg://postgres:postgres@localhost:55432/gic_take_home_test'
+```
+
+3. Apply migrations and seed demo data:
+
+```bash
+cd backend
+alembic upgrade head
+python scripts/seed.py
+cd ..
+```
+
+4. Start the backend:
+
+```bash
+cd backend
+uvicorn app.main:app --reload
+```
+
+5. Start the frontend in another terminal:
+
+```bash
+cd frontend
+cp .env.example .env.local
+pnpm dev
+```
+
+6. Manually verify the current frontend increment in the browser:
+
+- open `http://localhost:5173/cafes`
+- confirm the cafe list loads from the backend
+- type a location and click `Apply`
+- confirm the backend-filtered list updates
+- click `Clear` and confirm the full list returns
+- click an employee count link and confirm it targets `/employees?cafe_id=<uuid>`
+- confirm `Add Cafe` and row `Edit` links are visible
+
+7. Run the automated verification suites:
+
+```bash
+cd backend
+pytest
+cd ../frontend
+pnpm test
+pnpm build
+```
+
+This end-to-end path verifies:
+
+- backend boot, migrations, and seed flow
+- backend read/write API behavior and runtime hardening
+- frontend cafe list behavior for the current increment
+- frontend production build output
 
 ## Run Tests
 
@@ -649,23 +741,22 @@ pytest
 
 ## Current Increment
 
-Increment 11 adds network resilience and readiness on top of the Redis-backed backend:
+Increment 14 adds the first real frontend business page on top of the completed backend:
 
-- explicit PostgreSQL connect, pool, recycle, and statement timeout controls
-- explicit Redis socket timeout controls
-- bounded exponential backoff with jitter for safe Redis and probe operations
-- a dedicated readiness endpoint with dependency detail
-- narrow `503` dependency-unavailable handling for positively identified PostgreSQL outages only
-- resilience tests and README/config updates for degraded-mode operation
+- a live cafe list route at `/cafes`
+- backend-driven location filtering triggered explicitly from the UI
+- AG Grid-based cafe table using straightforward columns and actions
+- loading, empty, and retryable read-failure handling
+- employee-count deep links into `/employees?cafe_id=<uuid>`
+- README and frontend test updates for the current slice
 
 ## Changes Since Previous Increment
 
-- added shared retry/backoff and dependency-classification helpers
-- tightened PostgreSQL engine configuration for pool health and bounded query behavior
-- added Redis retry-aware fail-open behavior and readiness probing
-- exposed `GET /health/ready` without changing the cafe or employee API contracts
-- narrowed DB outage classification so auth/configuration mistakes do not masquerade as `503` outages
-- updated tests, env examples, and the README for Increment 11 behavior
+- replaced the cafe list placeholder with a real backend-backed page
+- simplified the frontend approach to keep filter state local and business logic in the backend
+- kept AG Grid usage minimal and explanation-friendly
+- reduced frontend tests to core flows and meaningful failure handling
+- updated README instructions for Increment 14 and end-to-end local verification
 
 ## Notes
 
