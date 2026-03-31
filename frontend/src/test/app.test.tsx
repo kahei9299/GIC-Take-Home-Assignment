@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { delay, http, HttpResponse } from "msw";
 
@@ -116,6 +116,203 @@ describe("cafe list route", () => {
 });
 
 describe("shared routes and query state", () => {
+  it("renders the cafe create form fields", async () => {
+    renderRoute("/cafes/new");
+
+    expect(await screen.findByRole("heading", { name: "Create Cafe" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Name" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Description" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Location" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Logo URL" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create Cafe" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+  });
+
+  it("blocks empty submission with required-field validation", async () => {
+    const user = userEvent.setup();
+    renderRoute("/cafes/new");
+
+    await user.click(await screen.findByRole("button", { name: "Create Cafe" }));
+
+    expect(await screen.findByText("Enter a cafe name.")).toBeInTheDocument();
+    expect(screen.getByText("Enter a description.")).toBeInTheDocument();
+    expect(screen.getByText("Enter a location.")).toBeInTheDocument();
+  });
+
+  it("creates a cafe, trims the payload, invalidates the list query, and returns to /cafes", async () => {
+    const createdCafes = [...defaultCafeFixtures];
+    const requestedPayloads: Array<Record<string, unknown>> = [];
+    let cafeListRequestCount = 0;
+
+    server.use(
+      http.get("http://localhost:8000/cafes", () => {
+        cafeListRequestCount += 1;
+        return HttpResponse.json(createdCafes);
+      }),
+      http.post("http://localhost:8000/cafes", async ({ request }) => {
+        const payload = (await request.json()) as Record<string, unknown>;
+        requestedPayloads.push(payload);
+
+        const createdCafe = {
+          id: "cafe-new-1",
+          employees: 0,
+          name: String(payload.name),
+          description: String(payload.description),
+          location: String(payload.location),
+          logo_url: typeof payload.logo_url === "string" ? payload.logo_url : null,
+        };
+
+        createdCafes.unshift(createdCafe);
+
+        return HttpResponse.json(
+          {
+            id: createdCafe.id,
+            name: createdCafe.name,
+            description: createdCafe.description,
+            location: createdCafe.location,
+            logo_url: createdCafe.logo_url,
+          },
+          { status: 201 },
+        );
+      }),
+    );
+
+    const user = userEvent.setup();
+    const { router } = renderRoute("/cafes");
+
+    expect(await screen.findByRole("gridcell", { name: "Central Perk" })).toBeInTheDocument();
+    expect(cafeListRequestCount).toBe(1);
+
+    await act(async () => {
+      await router.navigate("/cafes/new");
+    });
+
+    await user.type(await screen.findByRole("textbox", { name: "Name" }), "  New Cafe  ");
+    await user.type(screen.getByRole("textbox", { name: "Description" }), "  New branch near the river.  ");
+    await user.type(screen.getByRole("textbox", { name: "Location" }), "  River Valley  ");
+
+    await user.click(screen.getByRole("button", { name: "Create Cafe" }));
+
+    await waitFor(() => expect(requestedPayloads).toEqual([
+      {
+        name: "New Cafe",
+        description: "New branch near the river.",
+        location: "River Valley",
+      },
+    ]));
+    expect(await screen.findByRole("heading", { name: "Cafes" })).toBeInTheDocument();
+    expect(await screen.findByRole("gridcell", { name: "New Cafe" })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/cafes");
+    expect(cafeListRequestCount).toBe(2);
+  });
+
+  it("allows logo_url to be omitted from the create payload", async () => {
+    const requestedPayloads: Array<Record<string, unknown>> = [];
+
+    server.use(
+      http.post("http://localhost:8000/cafes", async ({ request }) => {
+        requestedPayloads.push((await request.json()) as Record<string, unknown>);
+
+        return HttpResponse.json(
+          {
+            id: "cafe-no-logo",
+            name: "Logo Free Cafe",
+            description: "No logo provided.",
+            location: "Novena",
+            logo_url: null,
+          },
+          { status: 201 },
+        );
+      }),
+    );
+
+    const user = userEvent.setup();
+    renderRoute("/cafes/new");
+
+    await user.type(await screen.findByRole("textbox", { name: "Name" }), "Logo Free Cafe");
+    await user.type(screen.getByRole("textbox", { name: "Description" }), "No logo provided.");
+    await user.type(screen.getByRole("textbox", { name: "Location" }), "Novena");
+    await user.click(screen.getByRole("button", { name: "Create Cafe" }));
+
+    await waitFor(() =>
+      expect(requestedPayloads).toEqual([
+        {
+          name: "Logo Free Cafe",
+          description: "No logo provided.",
+          location: "Novena",
+        },
+      ]),
+    );
+  });
+
+  it("shows a backend create failure without clearing the form", async () => {
+    server.use(
+      http.post("http://localhost:8000/cafes", () =>
+        HttpResponse.json(
+          {
+            code: "VALIDATION_ERROR",
+            message: "Name already exists.",
+            details: null,
+          },
+          { status: 422 },
+        ),
+      ),
+    );
+
+    const user = userEvent.setup();
+    renderRoute("/cafes/new");
+
+    await user.type(await screen.findByRole("textbox", { name: "Name" }), "Central Perk");
+    await user.type(screen.getByRole("textbox", { name: "Description" }), "Duplicate name.");
+    await user.type(screen.getByRole("textbox", { name: "Location" }), "Central Business District");
+    await user.click(screen.getByRole("button", { name: "Create Cafe" }));
+
+    expect(await screen.findByText("Unable to create cafe")).toBeInTheDocument();
+    expect(screen.getByText("Name already exists.")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue("Central Perk");
+    expect(screen.getByRole("textbox", { name: "Description" })).toHaveValue("Duplicate name.");
+    expect(screen.getByRole("textbox", { name: "Location" })).toHaveValue(
+      "Central Business District",
+    );
+  });
+
+  it("returns to /cafes when cancel is clicked", async () => {
+    const user = userEvent.setup();
+    renderRoute("/cafes/new");
+
+    await user.click(await screen.findByRole("button", { name: "Cancel" }));
+
+    expect(await screen.findByRole("heading", { name: "Cafes" })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/cafes");
+  });
+
+  it("wires dirty-form browser prompts for unload and route transitions", async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    renderRoute("/cafes/new");
+
+    await user.type(await screen.findByRole("textbox", { name: "Name" }), "Dirty Cafe");
+
+    await user.click(screen.getByRole("link", { name: "Employees" }));
+
+    expect(confirmSpy).toHaveBeenCalledWith("You have unsaved changes. Leave this page?");
+    expect(await screen.findByRole("heading", { name: "Create Cafe" })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/cafes/new");
+
+    const beforeUnloadEvent = new Event("beforeunload", { cancelable: true });
+    Object.defineProperty(beforeUnloadEvent, "returnValue", {
+      writable: true,
+      value: undefined,
+    });
+
+    window.dispatchEvent(beforeUnloadEvent);
+
+    expect(beforeUnloadEvent.defaultPrevented).toBe(true);
+    expect((beforeUnloadEvent as Event & { returnValue: unknown }).returnValue).toBe("");
+
+    confirmSpy.mockRestore();
+  });
+
   it("resolves deep routes for future page slices", async () => {
     renderRoute("/employees/new");
 

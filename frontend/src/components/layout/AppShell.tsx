@@ -30,7 +30,9 @@ export function AppShell() {
           justifyContent: "space-between",
           gap: 24,
           background: "linear-gradient(135deg, #16351f, #245132)",
-          paddingInline: 24,
+          padding: "12px 24px 0",
+          height: 76,
+          lineHeight: "normal",
         }}
       >
         <Space direction="vertical" size={0}>
@@ -38,11 +40,11 @@ export function AppShell() {
             GIC Cafe Manager
           </Typography.Title>
           <Typography.Text style={{ color: "rgba(248, 255, 246, 0.78)" }}>
-            Cafe list slice on top of the hosted backend contract
+            Cafe list and create slices on top of the hosted backend contract
           </Typography.Text>
         </Space>
         <Tag color="green-inverse" bordered={false}>
-          Increment 14
+          Increment 15
         </Tag>
       </Header>
       <Layout>

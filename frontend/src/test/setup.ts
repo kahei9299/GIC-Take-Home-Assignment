@@ -35,10 +35,7 @@ const NativeRequest = globalThis.Request;
 
 class RequestMock extends NativeRequest {
   constructor(input: ConstructorParameters<typeof NativeRequest>[0], init?: ConstructorParameters<typeof NativeRequest>[1]) {
-    const normalizedInit =
-      init && init.signal && !(init.signal instanceof globalThis.AbortSignal)
-        ? { ...init, signal: undefined }
-        : init;
+    const normalizedInit = init && "signal" in init ? { ...init, signal: undefined } : init;
 
     super(input, normalizedInit);
   }

@@ -1,6 +1,6 @@
 # GIC-Take-Home-Assignment
 
-Current iteration: Increment 14, cafe list page.
+Current iteration: Increment 15, simplified cafe create page.
 
 ## What Exists
 
@@ -53,12 +53,12 @@ Current iteration: Increment 14, cafe list page.
 - unit tests for shared error envelope handling
 - unit tests for cache disabled/fail-open behavior
 - `frontend/` React + Vite + TypeScript app scaffold
-- React Router app shell with a live cafe list route and placeholder employee/create/edit routes
+- React Router app shell with a live cafe list route, a cafe create route, and placeholder employee/edit routes
 - TanStack Query provider with safe-read retry defaults
-- Ant Design theme baseline and AG Grid-backed cafe list page
+- Ant Design theme baseline with an AG Grid-backed cafe list page and a standard create-cafe form
 - handwritten frontend API client layered on checked-in OpenAPI-generated types
 - frontend env examples for local, preview, and production backend targeting
-- frontend Vitest + Testing Library + MSW coverage for core cafe list flows and retry states
+- frontend Vitest + Testing Library + MSW coverage for core cafe list/create flows, retry states, and dirty-form prompt wiring
 
 ## What Does Not Exist Yet
 
@@ -259,11 +259,16 @@ Default local value:
 VITE_API_BASE_URL=http://localhost:8000
 ```
 
-Increment 14 uses the backend as the source of truth for cafe filtering:
+Increment 15 keeps the backend authoritative for cafe filtering and cafe write validation:
 
 - the cafe list page lives at `/cafes`
+- the cafe create page lives at `/cafes/new`
 - the location filter is local UI state and is committed explicitly with `Apply`
 - the frontend does not apply business filtering locally after the backend responds
+- the create form only performs basic required-field checks before submitting to `POST /cafes`
+- create submissions trim obvious whitespace, preserve entered values on failure, and return to `/cafes` on success
+- the cafe list query is invalidated after successful create so the list refetches with fresh backend data
+- dirty-form protection uses browser prompts only for unload and route-leave confirmation
 - positive employee counts deep-link to `/employees?cafe_id=<uuid>`
 
 The backend reads:
@@ -292,7 +297,7 @@ The backend reads:
 
 ## Backend Contract
 
-The API routes and success payloads remain the source of truth in Increment 14. The frontend consumes checked-in TypeScript types generated from `backend/openapi.json`, while keeping request helpers handwritten. Error responses use a stable JSON envelope:
+The API routes and success payloads remain the source of truth in Increment 15. The frontend consumes checked-in TypeScript types generated from `backend/openapi.json`, while keeping request helpers handwritten. Error responses use a stable JSON envelope:
 
 ```json
 {
@@ -395,7 +400,7 @@ CORS_ALLOWED_ORIGINS=http://localhost:5173,https://staging-frontend.example.com,
 - Docker setup
 - deployment config
 
-## How To Test Increment 14
+## How To Test Increment 15
 
 From the repository root after activating your virtual environment:
 
@@ -413,6 +418,12 @@ Frontend coverage in this increment includes:
 - explicit location filtering through the backend
 - clear/reset local filter behavior
 - retryable safe-read failure and recovery
+- create form render and required-field validation
+- successful cafe create with trimmed payload submission, list invalidation, and return to `/cafes`
+- optional `logo_url` omission on create
+- create failure rendering without clearing form values
+- cancel navigation from the create page
+- dirty-form browser prompt wiring for unload and route transitions
 - employee-count deep-link rendering
 - add/edit route navigation from the list page
 

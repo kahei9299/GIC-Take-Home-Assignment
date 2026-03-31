@@ -2,6 +2,8 @@ import type {
   BackendHealth,
   CafeDetail,
   CafeListItem,
+  CafeWriteRequest,
+  CafeWriteResponse,
   EmployeeDetail,
   EmployeeListItem,
 } from "@/api/contracts";
@@ -18,6 +20,13 @@ export function listCafes(location?: string) {
 
 export function getCafe(id: string) {
   return requestJson<CafeDetail>(`/cafes/${id}`);
+}
+
+export function createCafe(payload: CafeWriteRequest) {
+  return requestJson<CafeWriteResponse>("/cafes", {
+    method: "POST",
+    body: payload,
+  });
 }
 
 export function listEmployees(cafeId?: string) {
