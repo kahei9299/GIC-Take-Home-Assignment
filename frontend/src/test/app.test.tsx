@@ -4,7 +4,12 @@ import { delay, http, HttpResponse } from "msw";
 
 import { BackendHealthCard } from "@/routes/shared/BackendHealthCard";
 import { renderRoute, renderWithProviders } from "@/test/renderApp";
-import { defaultCafeDetailFixtures, defaultCafeFixtures, server } from "@/test/server";
+import {
+  defaultCafeDetailFixtures,
+  defaultCafeFixtures,
+  defaultEmployeeFixtures,
+  server,
+} from "@/test/server";
 
 describe("cafe list route", () => {
   it("renders the shell and the cafe list from the backend", async () => {
@@ -189,6 +194,198 @@ describe("cafe list route", () => {
     expect(await screen.findByText("Unable to delete cafe")).toBeInTheDocument();
     expect(screen.getByText("Delete is temporarily unavailable.")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Cafes" })).toBeInTheDocument();
+  });
+});
+
+describe("employee list route", () => {
+  it("renders the employee list from the backend", async () => {
+    renderRoute("/employees");
+
+    expect(await screen.findByRole("heading", { name: "Employees" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Employee directory" })).toBeInTheDocument();
+    expect(
+      screen.getByText("Filter the loaded employee rows by cafe name while keeping any backend cafe deep link explicit."),
+    ).toBeInTheDocument();
+    expect(await screen.findByRole("gridcell", { name: "UI0000010" })).toBeInTheDocument();
+    expect(screen.getByRole("gridcell", { name: "Alicia Tan" })).toBeInTheDocument();
+    expect(screen.getByRole("gridcell", { name: "alicia.tan@example.com" })).toBeInTheDocument();
+    expect(screen.getByRole("gridcell", { name: "91234567" })).toBeInTheDocument();
+    expect(screen.getByRole("gridcell", { name: "42" })).toBeInTheDocument();
+    expect(screen.getByRole("gridcell", { name: "Central Perk" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Edit Alicia Tan" })).toHaveAttribute(
+      "href",
+      "/employees/UI0000010/edit",
+    );
+    expect(screen.getByRole("link", { name: /Add Employee/ })).toHaveAttribute(
+      "href",
+      "/employees/new",
+    );
+  });
+
+  it("honors the inbound cafe_id deep link and shows the cafe-name filter context", async () => {
+    const requestedCafeIds: string[] = [];
+
+    server.use(
+      http.get("http://localhost:8000/employees", ({ request }) => {
+        const url = new URL(request.url);
+        const cafeId = url.searchParams.get("cafe_id") ?? "";
+        requestedCafeIds.push(cafeId);
+
+        const employees = cafeId
+          ? defaultEmployeeFixtures.filter((employee) => employee.cafe_id === cafeId)
+          : defaultEmployeeFixtures;
+
+        return HttpResponse.json(employees);
+      }),
+    );
+
+    renderRoute("/employees?cafe_id=cafe-central-1");
+
+    await waitFor(() => expect(requestedCafeIds).toEqual(["cafe-central-1"]));
+    expect(await screen.findByText("Showing employees currently assigned to Central Perk.")).toBeInTheDocument();
+    expect(screen.getByRole("gridcell", { name: "Alicia Tan" })).toBeInTheDocument();
+    expect(screen.queryByRole("gridcell", { name: "Marcus Lim" })).not.toBeInTheDocument();
+  });
+
+  it("clears the active employee filter back to /employees", async () => {
+    const user = userEvent.setup();
+    renderRoute("/employees?cafe_id=cafe-central-1");
+
+    expect(await screen.findByText("Showing employees currently assigned to Central Perk.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Clear deep link" }));
+
+    expect(await screen.findByRole("gridcell", { name: "Marcus Lim" })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/employees");
+    expect(window.location.search).toBe("");
+  });
+
+  it("filters the loaded employee rows by cafe name locally", async () => {
+    const user = userEvent.setup();
+    renderRoute("/employees");
+
+    expect(await screen.findByRole("gridcell", { name: "Alicia Tan" })).toBeInTheDocument();
+    expect(screen.getByRole("gridcell", { name: "Marcus Lim" })).toBeInTheDocument();
+
+    await user.type(screen.getByRole("textbox", { name: "Cafe name filter" }), "harbour");
+    await user.click(screen.getByRole("button", { name: "Apply" }));
+
+    expect(await screen.findByRole("gridcell", { name: "Marcus Lim" })).toBeInTheDocument();
+    expect(screen.queryByRole("gridcell", { name: "Alicia Tan" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("gridcell", { name: "Nadia Wong" })).not.toBeInTheDocument();
+  });
+
+  it("clears the local cafe-name filter and restores the loaded employee rows", async () => {
+    const user = userEvent.setup();
+    renderRoute("/employees");
+
+    expect(await screen.findByRole("gridcell", { name: "Alicia Tan" })).toBeInTheDocument();
+
+    await user.type(screen.getByRole("textbox", { name: "Cafe name filter" }), "central");
+    await user.click(screen.getByRole("button", { name: "Apply" }));
+    expect(await screen.findByRole("gridcell", { name: "Alicia Tan" })).toBeInTheDocument();
+    expect(screen.queryByRole("gridcell", { name: "Marcus Lim" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Clear" }));
+
+    expect(await screen.findByRole("gridcell", { name: "Marcus Lim" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Cafe name filter" })).toHaveValue("");
+  });
+
+  it("degrades safely when the cafe-name lookup fails but the employee list still loads", async () => {
+    server.use(
+      http.get("http://localhost:8000/cafes/:id", () =>
+        HttpResponse.json(
+          {
+            code: "RESOURCE_NOT_FOUND",
+            message: "Cafe not found.",
+            details: null,
+          },
+          { status: 404 },
+        ),
+      ),
+    );
+
+    renderRoute("/employees?cafe_id=cafe-central-1");
+
+    expect(await screen.findByText("Showing employees filtered by cafe.")).toBeInTheDocument();
+    expect(await screen.findByRole("gridcell", { name: "Alicia Tan" })).toBeInTheDocument();
+  });
+
+  it("renders unassigned employees explicitly", async () => {
+    renderRoute("/employees");
+
+    expect(await screen.findByRole("gridcell", { name: "Nadia Wong" })).toBeInTheDocument();
+    expect(screen.getByText("Unassigned")).toBeInTheDocument();
+  });
+
+  it("shows a retryable employee-list error state and recovers on retry", async () => {
+    let requestCount = 0;
+
+    server.use(
+      http.get("http://localhost:8000/employees", () => {
+        requestCount += 1;
+
+        if (requestCount <= 3) {
+          return HttpResponse.error();
+        }
+
+        return HttpResponse.json(defaultEmployeeFixtures);
+      }),
+    );
+
+    const user = userEvent.setup();
+    renderRoute("/employees");
+
+    expect(await screen.findByText("Unable to load employees")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Retry request" }));
+
+    expect(await screen.findByRole("gridcell", { name: "Alicia Tan" })).toBeInTheDocument();
+  });
+
+  it("shows an unfiltered empty state with an Add Employee CTA", async () => {
+    server.use(
+      http.get("http://localhost:8000/employees", () => HttpResponse.json([])),
+    );
+
+    renderRoute("/employees");
+
+    expect(await screen.findByText("No employees to display")).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: /Add Employee/ })).toHaveLength(2);
+  });
+
+  it("shows a filtered empty state with a clear-filter action", async () => {
+    server.use(
+      http.get("http://localhost:8000/employees", ({ request }) => {
+        const url = new URL(request.url);
+        const cafeId = url.searchParams.get("cafe_id");
+
+        if (cafeId === "cafe-central-2") {
+          return HttpResponse.json([]);
+        }
+
+        return HttpResponse.json(defaultEmployeeFixtures);
+      }),
+    );
+
+    renderRoute("/employees?cafe_id=cafe-central-2");
+
+    expect(await screen.findByText("No employees matched this cafe")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Clear deep link" })).toHaveLength(2);
+  });
+
+  it("shows a cafe-name-filter empty state with a clear action", async () => {
+    const user = userEvent.setup();
+    renderRoute("/employees");
+
+    expect(await screen.findByRole("gridcell", { name: "Alicia Tan" })).toBeInTheDocument();
+
+    await user.type(screen.getByRole("textbox", { name: "Cafe name filter" }), "orchard");
+    await user.click(screen.getByRole("button", { name: "Apply" }));
+
+    expect(await screen.findByText("No employees matched this cafe name")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Clear" })).toHaveLength(2);
   });
 });
 
@@ -701,7 +898,7 @@ describe("shared routes and query state", () => {
     confirmSpy.mockRestore();
   });
 
-  it("resolves deep routes for future page slices", async () => {
+  it("keeps the employee create route placeholder wired for the next increment", async () => {
     renderRoute("/employees/new");
 
     expect(await screen.findByRole("heading", { name: "Create Employee" })).toBeInTheDocument();

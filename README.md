@@ -1,6 +1,6 @@
 # GIC-Take-Home-Assignment
 
-Current iteration: Increment 17, completed cafe frontend slice hardening pass.
+Current iteration: Increment 18, employee list page with cafe deep-link filtering.
 
 ## What Exists
 
@@ -53,12 +53,12 @@ Current iteration: Increment 17, completed cafe frontend slice hardening pass.
 - unit tests for shared error envelope handling
 - unit tests for cache disabled/fail-open behavior
 - `frontend/` React + Vite + TypeScript app scaffold
-- React Router app shell with a completed cafe slice plus placeholder employee routes
+- React Router app shell with a completed cafe slice, a live employee list route, and placeholder employee write routes
 - TanStack Query provider with safe-read retry defaults for backend reads
-- Ant Design theme baseline with an AG Grid-backed cafe list page, direct list delete action, and shared cafe form wiring across create/edit routes
+- Ant Design theme baseline with AG Grid-backed cafe and employee list pages, cafe-style list toolbars, direct cafe list delete action, and shared cafe form wiring across create/edit routes
 - handwritten frontend API client layered on checked-in OpenAPI-generated types
 - frontend env examples for local, preview, and production backend targeting
-- frontend Vitest + Testing Library + MSW coverage for the completed cafe slice, hosted-style API base URLs, retry states, not-found handling, and dirty-form prompt wiring
+- frontend Vitest + Testing Library + MSW coverage for the completed cafe slice plus employee list deep links, retry states, not-found handling, and dirty-form prompt wiring
 
 ## What Does Not Exist Yet
 
@@ -167,7 +167,15 @@ frontend/
     routes/
       cafes/
         cafeForm.tsx
+        CafeCreateRoute.tsx
+        CafeEditRoute.tsx
+        CafeListGrid.tsx
+        CafeListRoute.tsx
+        CafeListToolbar.tsx
       employees/
+        EmployeeListGrid.tsx
+        EmployeeListRoute.tsx
+        EmployeeListToolbar.tsx
       shared/
     test/
       app.test.tsx
@@ -260,7 +268,7 @@ Default local value:
 VITE_API_BASE_URL=http://localhost:8000
 ```
 
-Increment 17 finalizes the cafe frontend slice while keeping the backend authoritative for cafe filtering, cafe write validation, and delete semantics:
+Increment 18 keeps the backend authoritative for cafe filtering, cafe write validation, delete semantics, and employee list filtering:
 
 - the cafe list page lives at `/cafes`
 - the cafe create page lives at `/cafes/new`
@@ -280,6 +288,13 @@ Increment 17 finalizes the cafe frontend slice while keeping the backend authori
 - staging and production backend URLs continue to flow through `VITE_API_BASE_URL` without source changes
 - dirty-form protection uses browser prompts only for unload and route-leave confirmation
 - positive employee counts deep-link to `/employees?cafe_id=<uuid>`
+- the employee list page lives at `/employees`
+- `/employees?cafe_id=<uuid>` remains the deep-link contract from cafe employee counts
+- the employee list fetches cafe detail separately to show a cafe name for the active filter label
+- if the cafe-name lookup fails, the employee list still loads with a generic filtered label
+- the employee list also supports a local cafe-name filter over the currently loaded employee rows
+- the employee grid shows full employee IDs, plain `days_worked`, explicit `Unassigned` state, and an `Edit` action per row
+- the employee list remains read-only in this increment and links forward to `/employees/new` and `/employees/:id/edit`
 
 The backend reads:
 
@@ -307,7 +322,7 @@ The backend reads:
 
 ## Backend Contract
 
-The API routes and success payloads remain the source of truth in Increment 17. The frontend consumes checked-in TypeScript types generated from `backend/openapi.json`, while keeping request helpers handwritten. Error responses use a stable JSON envelope:
+The API routes and success payloads remain the source of truth in Increment 18. The frontend consumes checked-in TypeScript types generated from `backend/openapi.json`, while keeping request helpers handwritten. Error responses use a stable JSON envelope:
 
 ```json
 {
@@ -410,7 +425,7 @@ CORS_ALLOWED_ORIGINS=http://localhost:5173,https://staging-frontend.example.com,
 - Docker setup
 - deployment config
 
-## How To Test Increment 17
+## How To Test Increment 18
 
 From the repository root after activating your virtual environment:
 
@@ -446,7 +461,17 @@ Frontend coverage in this increment includes:
 - dirty-form browser prompt wiring for create/edit unload and route transitions
 - staging-style absolute backend URL handling through `VITE_API_BASE_URL`
 - employee-count deep-link rendering
-- add/edit route navigation from the list page
+- add/edit cafe route navigation from the cafe list page
+- employee list render against backend-backed MSW responses
+- employee list deep-link filtering through `?cafe_id=<uuid>`
+- active employee filter label using cafe detail lookup
+- clear deep-link navigation back to `/employees`
+- local employee filtering by cafe name with the same card-based toolbar pattern used on the cafe page
+- degraded employee filter-label fallback when the cafe-name lookup fails
+- explicit `Unassigned` employee display
+- employee list retryable failure and recovery
+- employee list empty states for unfiltered, deep-link-filtered, and local cafe-name-filtered reads
+- employee `Edit` links and `Add Employee` CTA rendering
 
 To run the full backend test suite:
 

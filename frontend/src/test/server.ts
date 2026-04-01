@@ -42,6 +42,39 @@ export const defaultCafeDetailFixtures = Object.fromEntries(
   ]),
 );
 
+export const defaultEmployeeFixtures = [
+  {
+    id: "UI0000010",
+    name: "Alicia Tan",
+    email_address: "alicia.tan@example.com",
+    phone_number: "91234567",
+    gender: "Female",
+    days_worked: 42,
+    cafe: "Central Perk",
+    cafe_id: "cafe-central-1",
+  },
+  {
+    id: "UI0000011",
+    name: "Marcus Lim",
+    email_address: "marcus.lim@example.com",
+    phone_number: "92345678",
+    gender: "Male",
+    days_worked: 18,
+    cafe: "Harbour Grounds",
+    cafe_id: "cafe-west-1",
+  },
+  {
+    id: "UI0000012",
+    name: "Nadia Wong",
+    email_address: "nadia.wong@example.com",
+    phone_number: "93456789",
+    gender: "Female",
+    days_worked: 0,
+    cafe: null,
+    cafe_id: null,
+  },
+];
+
 function normalizeLocation(value: string | null) {
   return value?.trim().toLocaleLowerCase() ?? "";
 }
@@ -72,5 +105,15 @@ export const server = setupServer(
     }
 
     return HttpResponse.json(cafe);
+  }),
+  http.get(`${defaultApiBaseUrl}/employees`, ({ request }) => {
+    const url = new URL(request.url);
+    const requestedCafeId = url.searchParams.get("cafe_id");
+
+    const employees = requestedCafeId
+      ? defaultEmployeeFixtures.filter((employee) => employee.cafe_id === requestedCafeId)
+      : defaultEmployeeFixtures;
+
+    return HttpResponse.json(employees);
   }),
 );
