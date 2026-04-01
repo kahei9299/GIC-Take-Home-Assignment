@@ -7,6 +7,7 @@ import type {
   EmployeeCreateRequest,
   EmployeeDetail,
   EmployeeListItem,
+  EmployeeWriteRequest,
   EmployeeWriteResponse,
 } from "@/api/contracts";
 import { requestJson } from "@/api/http";
@@ -57,5 +58,18 @@ export function createEmployee(payload: EmployeeCreateRequest) {
   return requestJson<EmployeeWriteResponse>("/employees", {
     method: "POST",
     body: payload,
+  });
+}
+
+export function updateEmployee(id: string, payload: EmployeeWriteRequest) {
+  return requestJson<EmployeeWriteResponse>(`/employees/${id}`, {
+    method: "PUT",
+    body: payload,
+  });
+}
+
+export function deleteEmployee(id: string) {
+  return requestJson<void>(`/employees/${id}`, {
+    method: "DELETE",
   });
 }

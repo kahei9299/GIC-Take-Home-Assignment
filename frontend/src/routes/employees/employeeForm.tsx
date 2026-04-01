@@ -3,13 +3,13 @@ import type { ReactNode } from "react";
 import { Button, Form, Input, Select, Space } from "antd";
 import type { FormInstance, FormProps } from "antd";
 
-import type { CafeListItem, EmployeeCreateRequest, EmployeeDetail, Gender } from "@/api/contracts";
+import type { CafeListItem, EmployeeCreateRequest, EmployeeDetail, EmployeeWriteRequest, Gender } from "@/api/contracts";
 
 export type EmployeeFormValues = {
   name?: string;
   email_address?: string;
   phone_number?: string;
-  gender?: Gender;
+  gender?: Gender | "";
   cafe_id?: string;
 };
 
@@ -70,6 +70,20 @@ export function buildEmployeeCreatePayload(values: EmployeeFormValues): Employee
   };
 }
 
+export function buildEmployeeWritePayload(values: EmployeeFormValues): EmployeeWriteRequest {
+  const trimmedCafeId = values.cafe_id?.trim() ?? "";
+
+  return {
+    name: values.name?.trim() ?? "",
+    email_address: values.email_address?.trim() ?? "",
+    phone_number: values.phone_number?.trim() ?? "",
+    gender: values.gender as Gender,
+    // Edit mode exposes "Unassigned" as a blank select value, which the
+    // backend contract expects to arrive as an explicit null cafe_id.
+    cafe_id: trimmedCafeId.length > 0 ? trimmedCafeId : null,
+  };
+}
+
 type EmployeeFormFieldsProps = {
   form: FormInstance<EmployeeFormValues>;
   cafes: CafeListItem[];
@@ -81,6 +95,8 @@ type EmployeeFormFieldsProps = {
   onCancel: () => void;
   cancelDisabled?: boolean;
   extraActions?: ReactNode;
+  assignmentRequired?: boolean;
+  includeUnassignedOption?: boolean;
 };
 
 export function EmployeeFormFields({
@@ -94,7 +110,16 @@ export function EmployeeFormFields({
   onCancel,
   cancelDisabled,
   extraActions,
+  assignmentRequired = true,
+  includeUnassignedOption = false,
 }: EmployeeFormFieldsProps) {
+  // Create keeps assignment required, while edit prepends an explicit
+  // Unassigned option without forking the shared field rendering.
+  const cafeOptions = [
+    ...(includeUnassignedOption ? [{ label: "Unassigned", value: "" }] : []),
+    ...cafes.map((cafe) => ({ label: cafe.name, value: cafe.id })),
+  ];
+
   return (
     <Form<EmployeeFormValues>
       form={form}
@@ -161,13 +186,9 @@ export function EmployeeFormFields({
       <Form.Item
         label="Assigned Cafe"
         name="cafe_id"
-        rules={[{ required: true, message: "Select a cafe assignment." }]}
+        rules={assignmentRequired ? [{ required: true, message: "Select a cafe assignment." }] : undefined}
       >
-        <Select
-          placeholder="Select a cafe"
-          options={cafes.map((cafe) => ({ label: cafe.name, value: cafe.id }))}
-          virtual={false}
-        />
+        <Select placeholder="Select a cafe" options={cafeOptions} virtual={false} />
       </Form.Item>
       <Space>
         <Button type="primary" htmlType="submit" loading={submitLoading}>

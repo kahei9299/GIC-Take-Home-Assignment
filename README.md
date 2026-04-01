@@ -1,6 +1,6 @@
 # GIC-Take-Home-Assignment
 
-Current iteration: Increment 19, employee create page with required cafe assignment.
+Current iteration: Increment 20, employee edit/delete flows with list-level employee delete.
 
 ## What Exists
 
@@ -53,12 +53,12 @@ Current iteration: Increment 19, employee create page with required cafe assignm
 - unit tests for shared error envelope handling
 - unit tests for cache disabled/fail-open behavior
 - `frontend/` React + Vite + TypeScript app scaffold
-- React Router app shell with a completed cafe slice, a live employee list route, and a real employee create route
+- React Router app shell with completed cafe and employee routes for list, create, edit, and delete workflows
 - TanStack Query provider with safe-read retry defaults for backend reads
-- Ant Design theme baseline with AG Grid-backed cafe and employee list pages, cafe-style list toolbars, direct cafe list delete action, shared cafe form wiring across create/edit routes, and shared employee form wiring for create with future edit reuse
-- handwritten frontend API client layered on checked-in OpenAPI-generated types, including employee create support
+- Ant Design theme baseline with AG Grid-backed cafe and employee list pages, cafe-style list toolbars, direct cafe and employee list delete actions, shared cafe form wiring across create/edit routes, and shared employee form wiring across create/edit with explicit unassign support
+- handwritten frontend API client layered on checked-in OpenAPI-generated types, including employee update and delete support
 - frontend env examples for local, preview, and production backend targeting
-- frontend Vitest + Testing Library + MSW coverage for the completed cafe slice plus employee list deep links, employee create flows, retry states, not-found handling, and dirty-form prompt wiring
+- frontend Vitest + Testing Library + MSW coverage for the completed cafe slice plus employee list deep links, employee create/edit/delete flows, retry states, not-found handling, and dirty-form prompt wiring
 
 ## What Does Not Exist Yet
 
@@ -271,7 +271,7 @@ Default local value:
 VITE_API_BASE_URL=http://localhost:8000
 ```
 
-Increment 18 keeps the backend authoritative for cafe filtering, cafe write validation, delete semantics, and employee list filtering:
+Increment 20 keeps the backend authoritative for cafe filtering, cafe and employee write validation, assignment semantics, and delete behavior:
 
 - the cafe list page lives at `/cafes`
 - the cafe create page lives at `/cafes/new`
@@ -296,8 +296,17 @@ Increment 18 keeps the backend authoritative for cafe filtering, cafe write vali
 - the employee list fetches cafe detail separately to show a cafe name for the active filter label
 - if the cafe-name lookup fails, the employee list still loads with a generic filtered label
 - the employee list also supports a local cafe-name filter over the currently loaded employee rows
-- the employee grid shows full employee IDs, plain `days_worked`, explicit `Unassigned` state, and an `Edit` action per row
-- the employee list remains read-only in this increment and links forward to `/employees/new` and `/employees/:id/edit`
+- the employee grid shows full employee IDs, plain `days_worked`, explicit `Unassigned` state, and `Edit` plus `Delete` actions per row
+- the employee list page supports direct employee delete from the actions column without navigating through the edit page
+- the employee create page lives at `/employees/new`
+- the employee edit page lives at `/employees/:id/edit`
+- employee create requires an initial cafe assignment, while employee edit supports reassignment and explicit unassignment
+- employee create and edit share the same frontend employee field rendering and payload-normalization rules
+- employee update and delete submissions preserve entered values on failure, invalidate employee/cafe queries on success, and return to `/employees`
+- employee edit loads employee detail directly from `GET /employees/{id}` for prefill and retryable direct navigation
+- employee delete confirmation on both the list page and edit page explicitly warns that deleting an employee also removes their assignment history
+- direct employee edit loads show a dedicated not-found state when the backend returns `404`
+- employee list-page delete failures render inline above the grid without leaving `/employees`
 
 The backend reads:
 
@@ -325,7 +334,7 @@ The backend reads:
 
 ## Backend Contract
 
-The API routes and success payloads remain the source of truth in Increment 18. The frontend consumes checked-in TypeScript types generated from `backend/openapi.json`, while keeping request helpers handwritten. Error responses use a stable JSON envelope:
+The API routes and success payloads remain the source of truth in Increment 20. The frontend consumes checked-in TypeScript types generated from `backend/openapi.json`, while keeping request helpers handwritten. Error responses use a stable JSON envelope:
 
 ```json
 {
@@ -428,7 +437,7 @@ CORS_ALLOWED_ORIGINS=http://localhost:5173,https://staging-frontend.example.com,
 - Docker setup
 - deployment config
 
-## How To Test Increment 18
+## How To Test Increment 20
 
 From the repository root after activating your virtual environment:
 
@@ -468,6 +477,16 @@ Frontend coverage in this increment includes:
 - employee list render against backend-backed MSW responses
 - employee list deep-link filtering through `?cafe_id=<uuid>`
 - active employee filter label using cafe detail lookup
+- local employee cafe-name filtering and clear/reset behavior
+- employee list delete success and failure flows from the actions column
+- employee create success, validation, retry, failure, and unsaved-change prompt coverage
+- direct employee edit-route detail loading and form prefill
+- successful employee update with trimmed payload submission, list/detail invalidation, and return to `/employees`
+- employee unassign support through the shared edit form
+- employee edit-page retryable read failure, not-found rendering, and slow-read stability
+- employee update failure rendering without clearing form values
+- employee delete success and failure flows from the edit page
+- dirty-form browser prompt wiring for employee edit unload and route transitions
 - clear deep-link navigation back to `/employees`
 - local employee filtering by cafe name with the same card-based toolbar pattern used on the cafe page
 - degraded employee filter-label fallback when the cafe-name lookup fails
@@ -801,22 +820,25 @@ pytest
 
 ## Current Increment
 
-Increment 19 adds the first employee write flow on top of the completed backend and cafe frontend:
+Increment 20 completes the employee write/edit slice on top of the completed backend and cafe frontend:
 
 - a live employee create route at `/employees/new`
-- required initial cafe assignment aligned to the current backend contract
-- shared employee form helpers for dirty-state checks, payload trimming, and future edit-route reuse
-- retryable cafe-options loading before form entry
+- a live employee edit route at `/employees/:id/edit`
+- direct employee delete from both the list route and the edit route
+- required initial cafe assignment on create plus explicit reassignment and unassignment on edit
+- shared employee form helpers for dirty-state checks, payload trimming, and create/edit reuse
+- retryable employee-detail and cafe-options loading before edit form entry
 - mutation-driven return to `/employees` with employee and cafe query invalidation
 - README and frontend test updates for the current slice
 
 ## Changes Since Previous Increment
 
-- replaced the employee create placeholder with a real backend-backed form
-- kept employee assignment UI thin by requiring one explicit cafe selection rather than duplicating backend rules
-- reused the established cafe-route dirty-form and mutation patterns instead of adding new frontend abstractions
-- added frontend coverage for employee create success, validation, retry, failure, and unsaved-change prompts
-- updated README instructions for Increment 19 and the current frontend state
+- replaced the employee edit placeholder with a real backend-backed edit route
+- added employee delete actions to both the list grid and the edit page using the established cafe delete pattern
+- kept employee assignment UI thin by reusing one shared form and mapping explicit unassign to backend `cafe_id: null`
+- reused the established route-level dirty-form, retry, not-found, and mutation-error patterns instead of adding new frontend abstractions
+- expanded frontend coverage for employee list delete, employee edit update/delete, unassign, and direct-route error states
+- updated README instructions and visible labels for Increment 20 and the current frontend state
 
 ## Notes
 

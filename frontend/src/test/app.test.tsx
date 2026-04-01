@@ -402,6 +402,79 @@ describe("employee list route", () => {
     expect(await screen.findByText("No employees matched this cafe name")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Clear" })).toHaveLength(2);
   });
+
+  it("deletes an employee directly from the list after confirmation", async () => {
+    const employees: EmployeeListItem[] = defaultEmployeeFixtures.map((employee) => ({
+      ...employee,
+      gender: employee.gender as EmployeeListItem["gender"],
+    }));
+    let employeeListRequestCount = 0;
+    let deleteRequestCount = 0;
+
+    server.use(
+      http.get("http://localhost:8000/employees", () => {
+        employeeListRequestCount += 1;
+        return HttpResponse.json(employees);
+      }),
+      http.delete("http://localhost:8000/employees/:id", ({ params }) => {
+        deleteRequestCount += 1;
+        const employeeIndex = employees.findIndex((entry) => entry.id === String(params.id));
+        employees.splice(employeeIndex, 1);
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+
+    const user = userEvent.setup();
+    renderRoute("/employees");
+
+    expect(await screen.findByRole("gridcell", { name: "Alicia Tan" })).toBeInTheDocument();
+    expect(employeeListRequestCount).toBe(1);
+
+    await user.click(screen.getByRole("button", { name: "Delete Alicia Tan" }));
+
+    expect(await screen.findByText(/removes their assignment history/i)).toBeInTheDocument();
+
+    await user.click(
+      await screen.findAllByRole("button", { name: "Delete Employee" }).then((buttons) => buttons[0]),
+    );
+
+    await waitFor(() => expect(deleteRequestCount).toBe(1));
+    await waitFor(() =>
+      expect(screen.queryByRole("gridcell", { name: "Alicia Tan" })).not.toBeInTheDocument(),
+    );
+    expect(employeeListRequestCount).toBe(2);
+    expect(window.location.pathname).toBe("/employees");
+  });
+
+  it("shows a list-level delete failure without leaving the employee page", async () => {
+    server.use(
+      http.delete("http://localhost:8000/employees/:id", () =>
+        HttpResponse.json(
+          {
+            code: "CONFLICT",
+            message: "Delete is temporarily unavailable.",
+            details: null,
+          },
+          { status: 409 },
+        ),
+      ),
+    );
+
+    const user = userEvent.setup();
+    renderRoute("/employees");
+
+    expect(await screen.findByRole("gridcell", { name: "Alicia Tan" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Delete Alicia Tan" }));
+    await user.click(
+      await screen.findAllByRole("button", { name: "Delete Employee" }).then((buttons) => buttons[0]),
+    );
+
+    expect(await screen.findByText("Unable to delete employee")).toBeInTheDocument();
+    expect(screen.getByText("Delete is temporarily unavailable.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Employees" })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/employees");
+  });
 });
 
 describe("shared routes and query state", () => {
@@ -1108,15 +1181,357 @@ describe("shared routes and query state", () => {
     expect(await screen.findByRole("combobox", { name: "Assigned Cafe" })).toBeInTheDocument();
   });
 
-  it("serves employee detail fixtures for the next edit increment", async () => {
-    expect(defaultEmployeeDetailFixtures["UI0000010"]).toEqual({
-      name: "Alicia Tan",
-      email_address: "alicia.tan@example.com",
-      phone_number: "91234567",
-      gender: "Female",
-      cafe: "Central Perk",
-      cafe_id: "cafe-central-1",
+  it("loads employee detail on direct navigation and prefills the edit form", async () => {
+    renderRoute("/employees/UI0000010/edit");
+
+    expect(await screen.findByRole("heading", { name: "Edit Employee" })).toBeInTheDocument();
+    expect(await screen.findByDisplayValue(defaultEmployeeDetailFixtures["UI0000010"].name)).toBeInTheDocument();
+    expect(
+      screen.getByDisplayValue(defaultEmployeeDetailFixtures["UI0000010"].email_address),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByDisplayValue(defaultEmployeeDetailFixtures["UI0000010"].phone_number),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Gender" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Assigned Cafe" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save Changes" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete Employee" })).toBeInTheDocument();
+  });
+
+  it("keeps direct employee edit navigation stable while required reads are slow", async () => {
+    server.use(
+      http.get("http://localhost:8000/employees/:id", async ({ params }) => {
+        await delay(300);
+        return HttpResponse.json(defaultEmployeeDetailFixtures[String(params.id)]);
+      }),
+      http.get("http://localhost:8000/cafes", async () => {
+        await delay(300);
+        return HttpResponse.json(defaultCafeFixtures);
+      }),
+    );
+
+    renderRoute("/employees/UI0000010/edit");
+
+    expect(screen.getByText("Loading employee details")).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("Alicia Tan")).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/employees/UI0000010/edit");
+  });
+
+  it("updates an employee, trims the payload, invalidates queries, and returns to /employees", async () => {
+    const employees: EmployeeListItem[] = defaultEmployeeFixtures.map((employee) => ({
+      ...employee,
+      gender: employee.gender as EmployeeListItem["gender"],
+    }));
+    const employeeDetails = structuredClone(defaultEmployeeDetailFixtures);
+    const requestedPayloads: Array<Record<string, unknown>> = [];
+    let employeeListRequestCount = 0;
+    let cafeListRequestCount = 0;
+
+    server.use(
+      http.get("http://localhost:8000/employees", () => {
+        employeeListRequestCount += 1;
+        return HttpResponse.json(employees);
+      }),
+      http.get("http://localhost:8000/employees/:id", ({ params }) => {
+        const employee = employeeDetails[String(params.id)];
+
+        if (!employee) {
+          return HttpResponse.json(
+            {
+              code: "RESOURCE_NOT_FOUND",
+              message: "Employee not found.",
+              details: null,
+            },
+            { status: 404 },
+          );
+        }
+
+        return HttpResponse.json(employee);
+      }),
+      http.get("http://localhost:8000/cafes", () => {
+        cafeListRequestCount += 1;
+        return HttpResponse.json(defaultCafeFixtures);
+      }),
+      http.put("http://localhost:8000/employees/:id", async ({ params, request }) => {
+        const payload = (await request.json()) as Record<string, unknown>;
+        requestedPayloads.push(payload);
+
+        const employeeIndex = employees.findIndex((entry) => entry.id === String(params.id));
+        const matchedCafe = defaultCafeFixtures.find((cafe) => cafe.id === payload.cafe_id);
+
+        employees[employeeIndex] = {
+          ...employees[employeeIndex],
+          name: String(payload.name),
+          email_address: String(payload.email_address),
+          phone_number: String(payload.phone_number),
+          gender: String(payload.gender) as EmployeeListItem["gender"],
+          cafe: matchedCafe?.name ?? null,
+          cafe_id: typeof payload.cafe_id === "string" ? payload.cafe_id : null,
+          days_worked: employees[employeeIndex].days_worked,
+        };
+
+        employeeDetails[String(params.id)] = {
+          name: employees[employeeIndex].name,
+          email_address: employees[employeeIndex].email_address,
+          phone_number: employees[employeeIndex].phone_number,
+          gender: employees[employeeIndex].gender,
+          cafe: employees[employeeIndex].cafe,
+          cafe_id: employees[employeeIndex].cafe_id,
+        };
+
+        return HttpResponse.json(employees[employeeIndex]);
+      }),
+    );
+
+    const user = userEvent.setup();
+    const { router } = renderRoute("/employees");
+
+    expect(await screen.findByRole("gridcell", { name: "Alicia Tan" })).toBeInTheDocument();
+    expect(employeeListRequestCount).toBe(1);
+
+    await act(async () => {
+      await router.navigate("/employees/UI0000010/edit");
     });
+
+    const nameInput = await screen.findByRole("textbox", { name: "Name" });
+    await user.clear(nameInput);
+    await user.type(nameInput, "  Alicia Tan Updated  ");
+    await user.clear(screen.getByRole("textbox", { name: "Email" }));
+    await user.type(screen.getByRole("textbox", { name: "Email" }), "  alicia.updated@example.com  ");
+    await user.clear(screen.getByRole("textbox", { name: "Phone Number" }));
+    await user.type(screen.getByRole("textbox", { name: "Phone Number" }), " 82345678 ");
+    await selectOption("Assigned Cafe", "Harbour Grounds");
+
+    await user.click(screen.getByRole("button", { name: "Save Changes" }));
+
+    await waitFor(() =>
+      expect(requestedPayloads).toEqual([
+        {
+          name: "Alicia Tan Updated",
+          email_address: "alicia.updated@example.com",
+          phone_number: "82345678",
+          gender: "Female",
+          cafe_id: "cafe-west-1",
+        },
+      ]),
+    );
+    expect(await screen.findByRole("heading", { name: "Employees" })).toBeInTheDocument();
+    expect(await screen.findByRole("gridcell", { name: "Alicia Tan Updated" })).toBeInTheDocument();
+    expect(screen.getAllByRole("gridcell", { name: "Harbour Grounds" }).length).toBeGreaterThan(0);
+    expect(window.location.pathname).toBe("/employees");
+    expect(employeeListRequestCount).toBe(2);
+    expect(cafeListRequestCount).toBe(2);
+  });
+
+  it("supports unassigning an employee from the edit form", async () => {
+    const requestedPayloads: Array<Record<string, unknown>> = [];
+
+    server.use(
+      http.put("http://localhost:8000/employees/:id", async ({ request }) => {
+        requestedPayloads.push((await request.json()) as Record<string, unknown>);
+
+        return HttpResponse.json({
+          id: "UI0000010",
+          name: "Alicia Tan",
+          email_address: "alicia.tan@example.com",
+          phone_number: "91234567",
+          gender: "Female",
+          days_worked: 0,
+          cafe: null,
+          cafe_id: null,
+        });
+      }),
+    );
+
+    const user = userEvent.setup();
+    renderRoute("/employees/UI0000010/edit");
+
+    await screen.findByRole("textbox", { name: "Name" });
+    await selectOption("Assigned Cafe", "Unassigned");
+    await user.click(screen.getByRole("button", { name: "Save Changes" }));
+
+    await waitFor(() =>
+      expect(requestedPayloads).toEqual([
+        {
+          name: "Alicia Tan",
+          email_address: "alicia.tan@example.com",
+          phone_number: "91234567",
+          gender: "Female",
+          cafe_id: null,
+        },
+      ]),
+    );
+  });
+
+  it("shows a retryable read failure for the employee edit page and recovers on retry", async () => {
+    let employeeRequestCount = 0;
+
+    server.use(
+      http.get("http://localhost:8000/employees/:id", ({ params }) => {
+        employeeRequestCount += 1;
+
+        if (employeeRequestCount <= 3) {
+          return HttpResponse.error();
+        }
+
+        return HttpResponse.json(defaultEmployeeDetailFixtures[String(params.id)]);
+      }),
+    );
+
+    const user = userEvent.setup();
+    renderRoute("/employees/UI0000010/edit");
+
+    expect(await screen.findByText("Unable to load employee details")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Retry request" }));
+
+    expect(await screen.findByDisplayValue("Alicia Tan")).toBeInTheDocument();
+  });
+
+  it("shows a clear not-found state when the employee detail returns 404", async () => {
+    server.use(
+      http.get("http://localhost:8000/employees/:id", () =>
+        HttpResponse.json(
+          {
+            code: "RESOURCE_NOT_FOUND",
+            message: "Employee not found.",
+            details: null,
+          },
+          { status: 404 },
+        ),
+      ),
+    );
+
+    renderRoute("/employees/UI0000999/edit");
+
+    expect(await screen.findByText("Employee not found")).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Name" })).not.toBeInTheDocument();
+  });
+
+  it("shows an employee update failure without clearing the edit form", async () => {
+    server.use(
+      http.put("http://localhost:8000/employees/:id", () =>
+        HttpResponse.json(
+          {
+            code: "CONFLICT",
+            message: "Employee email address or phone number already exists.",
+            details: null,
+          },
+          { status: 409 },
+        ),
+      ),
+    );
+
+    const user = userEvent.setup();
+    renderRoute("/employees/UI0000010/edit");
+
+    const nameInput = await screen.findByRole("textbox", { name: "Name" });
+    await user.clear(nameInput);
+    await user.type(nameInput, "Alicia Tan Updated");
+    await user.click(screen.getByRole("button", { name: "Save Changes" }));
+
+    expect(await screen.findByText("Unable to update employee")).toBeInTheDocument();
+    expect(screen.getByText("Employee email address or phone number already exists.")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue("Alicia Tan Updated");
+  });
+
+  it("deletes an employee after confirmation, invalidates queries, and returns to /employees", async () => {
+    const employees: EmployeeListItem[] = defaultEmployeeFixtures.map((employee) => ({
+      ...employee,
+      gender: employee.gender as EmployeeListItem["gender"],
+    }));
+    let employeeListRequestCount = 0;
+    let deleteRequestCount = 0;
+
+    server.use(
+      http.get("http://localhost:8000/employees", () => {
+        employeeListRequestCount += 1;
+        return HttpResponse.json(employees);
+      }),
+      http.delete("http://localhost:8000/employees/:id", ({ params }) => {
+        deleteRequestCount += 1;
+        const employeeIndex = employees.findIndex((entry) => entry.id === String(params.id));
+        employees.splice(employeeIndex, 1);
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+
+    const user = userEvent.setup();
+    const { router } = renderRoute("/employees");
+
+    expect(await screen.findByRole("gridcell", { name: "Alicia Tan" })).toBeInTheDocument();
+    expect(employeeListRequestCount).toBe(1);
+
+    await act(async () => {
+      await router.navigate("/employees/UI0000010/edit");
+    });
+
+    await user.click(await screen.findByRole("button", { name: "Delete Employee" }));
+    await user.click(
+      await screen.findAllByRole("button", { name: "Delete Employee" }).then((buttons) => buttons[1]),
+    );
+
+    await waitFor(() => expect(deleteRequestCount).toBe(1));
+    expect(await screen.findByRole("heading", { name: "Employees" })).toBeInTheDocument();
+    await waitFor(() => expect(employeeListRequestCount).toBe(2));
+    await waitFor(() =>
+      expect(screen.queryByRole("gridcell", { name: "Alicia Tan" })).not.toBeInTheDocument(),
+    );
+    expect(window.location.pathname).toBe("/employees");
+  });
+
+  it("shows an employee delete failure and keeps the user on the edit page", async () => {
+    server.use(
+      http.delete("http://localhost:8000/employees/:id", () =>
+        HttpResponse.json(
+          {
+            code: "CONFLICT",
+            message: "Delete is temporarily unavailable.",
+            details: null,
+          },
+          { status: 409 },
+        ),
+      ),
+    );
+
+    const user = userEvent.setup();
+    renderRoute("/employees/UI0000010/edit");
+
+    await user.click(await screen.findByRole("button", { name: "Delete Employee" }));
+    await user.click(
+      await screen.findAllByRole("button", { name: "Delete Employee" }).then((buttons) => buttons[1]),
+    );
+
+    expect(await screen.findByText("Unable to delete employee")).toBeInTheDocument();
+    expect(screen.getByText("Delete is temporarily unavailable.")).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/employees/UI0000010/edit");
+  });
+
+  it("wires dirty-form prompts on the employee edit page for unload and route transitions", async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    renderRoute("/employees/UI0000010/edit");
+
+    await user.type(await screen.findByRole("textbox", { name: "Name" }), " Updated");
+
+    await user.click(screen.getByRole("link", { name: "Cafes" }));
+
+    expect(confirmSpy).toHaveBeenCalledWith("You have unsaved changes. Leave this page?");
+    expect(await screen.findByRole("heading", { name: "Edit Employee" })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/employees/UI0000010/edit");
+
+    const beforeUnloadEvent = new Event("beforeunload", { cancelable: true });
+    Object.defineProperty(beforeUnloadEvent, "returnValue", {
+      writable: true,
+      value: undefined,
+    });
+
+    window.dispatchEvent(beforeUnloadEvent);
+
+    expect(beforeUnloadEvent.defaultPrevented).toBe(true);
+    expect((beforeUnloadEvent as Event & { returnValue: unknown }).returnValue).toBe("");
+
+    confirmSpy.mockRestore();
   });
 
   it("shows a retryable error state for a failed safe read and recovers after retry", async () => {

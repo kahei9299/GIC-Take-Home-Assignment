@@ -1,21 +1,26 @@
 import { useMemo, useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
-import { Button, Card, Space, Tag, Typography } from "antd";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Alert, App, Button, Card, Space, Tag, Typography } from "antd";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
-import { getCafe, listEmployees } from "@/api/client";
+import { deleteEmployee, getCafe, listEmployees } from "@/api/client";
+import type { EmployeeListItem } from "@/api/contracts";
+import { ApiError } from "@/api/http";
 import { QueryState } from "@/components/feedback/QueryState";
 import { PageFrame } from "@/components/layout/PageFrame";
 import { EmployeeListGrid } from "@/routes/employees/EmployeeListGrid";
 import { EmployeeListToolbar } from "@/routes/employees/EmployeeListToolbar";
 
 export function EmployeeListRoute() {
+  const { modal } = App.useApp();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const cafeId = searchParams.get("cafe_id") ?? "";
   const [cafeNameDraft, setCafeNameDraft] = useState("");
   const [committedCafeName, setCommittedCafeName] = useState("");
+  const [deletingEmployeeId, setDeletingEmployeeId] = useState<string | null>(null);
 
   const employeesQuery = useQuery({
     // `cafe_id` is the stable deep-link contract from the cafe slice. The
@@ -68,6 +73,41 @@ export function EmployeeListRoute() {
   const clearCafeNameFilter = () => {
     setCafeNameDraft("");
     setCommittedCafeName("");
+  };
+
+  const deleteEmployeeMutation = useMutation({
+    mutationFn: async (employeeId: string) => {
+      setDeletingEmployeeId(employeeId);
+      await deleteEmployee(employeeId);
+    },
+    onSuccess: async () => {
+      // Employee deletes can change cafe staffing counts as well as the
+      // employee list rows, so both lists are treated as stale.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["employees", "list"] }),
+        queryClient.invalidateQueries({ queryKey: ["cafes", "list"] }),
+      ]);
+    },
+    onSettled: () => {
+      setDeletingEmployeeId(null);
+    },
+  });
+
+  const handleDeleteEmployee = (employee: EmployeeListItem) => {
+    deleteEmployeeMutation.reset();
+
+    modal.confirm({
+      title: "Delete this employee?",
+      content: "Deleting an employee also removes their assignment history. This action cannot be undone.",
+      okText: "Delete Employee",
+      cancelText: "Cancel",
+      okButtonProps: { danger: true, loading: deletingEmployeeId === employee.id },
+      onOk: async () => {
+        // Swallow the rejected promise here so the modal can stay open long
+        // enough for the route-level error alert to render consistently.
+        await deleteEmployeeMutation.mutateAsync(employee.id).catch(() => undefined);
+      },
+    });
   };
 
   return (
@@ -128,8 +168,26 @@ export function EmployeeListRoute() {
             pendingDescription="Loading the latest employee list from the backend."
             pendingTitle="Loading employees"
           >
-            {filteredEmployees.length > 0 ? <EmployeeListGrid employees={filteredEmployees} /> : null}
+            {filteredEmployees.length > 0 ? (
+              <EmployeeListGrid
+                employees={filteredEmployees}
+                onDeleteEmployee={handleDeleteEmployee}
+                deletingEmployeeId={deletingEmployeeId}
+              />
+            ) : null}
           </QueryState>
+          {deleteEmployeeMutation.isError ? (
+            <Alert
+              type="error"
+              showIcon
+              message="Unable to delete employee"
+              description={
+                deleteEmployeeMutation.error instanceof ApiError
+                  ? deleteEmployeeMutation.error.message
+                  : "The backend rejected the delete request."
+              }
+            />
+          ) : null}
           {!hasActiveFilter && !hasActiveCafeNameFilter && employeesQuery.isSuccess && filteredEmployees.length === 0 ? (
             <Button type="primary" href="/employees/new" style={{ width: "fit-content" }}>
               Add Employee

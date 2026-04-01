@@ -1,16 +1,24 @@
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import type { EmployeeListItem } from "@/api/contracts";
 
-import { Button, Typography } from "antd";
+import { Button, Space, Typography } from "antd";
 import { AgGridReact } from "ag-grid-react";
 
 import { defaultGridOptions } from "@/components/grid/defaultGridOptions";
 
 type EmployeeListGridProps = {
   employees: EmployeeListItem[];
+  onDeleteEmployee: (employee: EmployeeListItem) => void;
+  deletingEmployeeId?: string | null;
 };
 
-function buildColumns(): ColDef<EmployeeListItem>[] {
+function buildColumns({
+  deletingEmployeeId,
+  onDeleteEmployee,
+}: {
+  deletingEmployeeId?: string | null;
+  onDeleteEmployee: (employee: EmployeeListItem) => void;
+}): ColDef<EmployeeListItem>[] {
   const renderName = ({ data }: ICellRendererParams<EmployeeListItem>) =>
     data ? (
       <Typography.Text strong title={data.name}>
@@ -48,9 +56,23 @@ function buildColumns(): ColDef<EmployeeListItem>[] {
 
   const renderActions = ({ data }: ICellRendererParams<EmployeeListItem>) =>
     data ? (
-      <Button aria-label={`Edit ${data.name}`} href={`/employees/${data.id}/edit`} size="small" type="default">
-        Edit
-      </Button>
+      <div style={{ display: "flex", alignItems: "center", height: "100%" }}>
+        <Space size={8}>
+          <Button aria-label={`Edit ${data.name}`} href={`/employees/${data.id}/edit`} size="small" type="default">
+            Edit
+          </Button>
+          <Button
+            aria-label={`Delete ${data.name}`}
+            danger
+            size="small"
+            type="default"
+            loading={deletingEmployeeId === data.id}
+            onClick={() => onDeleteEmployee(data)}
+          >
+            Delete
+          </Button>
+        </Space>
+      </div>
     ) : null;
 
   return [
@@ -100,11 +122,15 @@ function buildColumns(): ColDef<EmployeeListItem>[] {
   ];
 }
 
-export function EmployeeListGrid({ employees }: EmployeeListGridProps) {
+export function EmployeeListGrid({
+  employees,
+  onDeleteEmployee,
+  deletingEmployeeId,
+}: EmployeeListGridProps) {
   return (
     <div className="ag-theme-quartz" style={{ height: 420 }}>
       <AgGridReact<EmployeeListItem>
-        columnDefs={buildColumns()}
+        columnDefs={buildColumns({ deletingEmployeeId, onDeleteEmployee })}
         gridOptions={defaultGridOptions}
         rowData={employees}
       />
