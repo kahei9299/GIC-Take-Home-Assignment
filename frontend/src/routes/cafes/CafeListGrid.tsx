@@ -62,19 +62,19 @@ function buildColumns({
     data ? (
       <div style={{ display: "flex", alignItems: "center", height: "100%" }}>
         <Space size={8}>
-        <Button aria-label={`Edit ${data.name}`} href={`/cafes/${data.id}/edit`} size="small" type="default">
-          Edit
-        </Button>
-        <Button
-          aria-label={`Delete ${data.name}`}
-          danger
-          size="small"
-          type="default"
-          loading={deletingCafeId === data.id}
-          onClick={() => onDeleteCafe(data)}
-        >
-          Delete
-        </Button>
+          <Button aria-label={`Edit ${data.name}`} href={`/cafes/${data.id}/edit`} size="small" type="default">
+            Edit
+          </Button>
+          <Button
+            aria-label={`Delete ${data.name}`}
+            danger
+            size="small"
+            type="default"
+            loading={deletingCafeId === data.id}
+            onClick={() => onDeleteCafe(data)}
+          >
+            Delete
+          </Button>
         </Space>
       </div>
     ) : null;

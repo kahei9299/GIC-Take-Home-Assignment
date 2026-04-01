@@ -7,7 +7,8 @@ if (!apiBaseUrl) {
 }
 
 // Tests use a deterministic fallback so the HTTP layer can stay strict in
-// normal runtime code while MSW intercepts the same local origin.
+// normal runtime code while MSW intercepts the same local origin. Non-test
+// builds must always provide an explicit backend URL for local/staging/prod.
 export const env = {
   apiBaseUrl,
 };

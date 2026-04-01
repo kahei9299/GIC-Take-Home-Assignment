@@ -115,6 +115,20 @@ describe("cafe list route", () => {
     expect(await screen.findByRole("gridcell", { name: "Central Perk" })).toBeInTheDocument();
   });
 
+  it("keeps the cafe list stable while a slow backend read is pending", async () => {
+    server.use(
+      http.get("http://localhost:8000/cafes", async () => {
+        await delay(400);
+        return HttpResponse.json(defaultCafeFixtures);
+      }),
+    );
+
+    renderRoute("/cafes");
+
+    expect(screen.getByText("Loading cafes")).toBeInTheDocument();
+    expect(await screen.findByRole("gridcell", { name: "Central Perk" })).toBeInTheDocument();
+  });
+
   it("deletes a cafe directly from the list after confirmation", async () => {
     const editableCafes = [...defaultCafeFixtures];
     let cafeListRequestCount = 0;
@@ -392,6 +406,21 @@ describe("shared routes and query state", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save Changes" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Delete Cafe" })).toBeInTheDocument();
+  });
+
+  it("keeps direct edit navigation stable while the detail read is slow", async () => {
+    server.use(
+      http.get("http://localhost:8000/cafes/:id", async ({ params }) => {
+        await delay(300);
+        return HttpResponse.json(defaultCafeDetailFixtures[String(params.id)]);
+      }),
+    );
+
+    renderRoute("/cafes/cafe-central-1/edit");
+
+    expect(screen.getByText("Loading cafe details")).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("Central Perk")).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/cafes/cafe-central-1/edit");
   });
 
   it("updates a cafe, trims the payload, invalidates queries, and returns to /cafes", async () => {
@@ -702,5 +731,20 @@ describe("shared routes and query state", () => {
     await user.click(screen.getByRole("button", { name: "Retry request" }));
 
     expect(await screen.findByText("ok")).toBeInTheDocument();
+  });
+
+  it("supports staging-style absolute backend URLs through VITE_API_BASE_URL", async () => {
+    server.use(
+      http.get("https://staging-backend.example.com/health", () =>
+        HttpResponse.json({ status: "ok" }),
+      ),
+    );
+
+    vi.resetModules();
+    vi.stubEnv("VITE_API_BASE_URL", "https://staging-backend.example.com");
+
+    const { getHealth: stagedGetHealth } = await import("@/api/client");
+
+    await expect(stagedGetHealth()).resolves.toEqual({ status: "ok" });
   });
 });

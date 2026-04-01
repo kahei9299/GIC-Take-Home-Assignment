@@ -1,62 +1,26 @@
 import { useEffect, useMemo, useRef } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Alert, App, Button, Form, Input, Result, Space } from "antd";
+import { Alert, App, Button, Form, Result } from "antd";
 import type { FormProps } from "antd";
 import { unstable_usePrompt, useBeforeUnload, useNavigate, useParams } from "react-router-dom";
 
 import { deleteCafe, getCafe, updateCafe } from "@/api/client";
-import type { CafeDetail, CafeWriteRequest } from "@/api/contracts";
+import type { CafeWriteRequest } from "@/api/contracts";
 import { ApiError } from "@/api/http";
 import { QueryState } from "@/components/feedback/QueryState";
 import { PageFrame } from "@/components/layout/PageFrame";
-
-type CafeEditFormValues = {
-  name?: string;
-  description?: string;
-  location?: string;
-  logo_url?: string;
-};
-
-type NormalizedCafeFormValues = Required<CafeEditFormValues>;
-
-function normalizeFormValues(values: CafeEditFormValues | CafeDetail): NormalizedCafeFormValues {
-  return {
-    name: values.name ?? "",
-    description: values.description ?? "",
-    location: values.location ?? "",
-    logo_url: values.logo_url ?? "",
-  };
-}
-
-function hasDirtyValues(
-  values: CafeEditFormValues | undefined,
-  initialValues: NormalizedCafeFormValues | null,
-) {
-  if (!values || initialValues === null) {
-    return false;
-  }
-
-  return Object.entries(initialValues).some(([key, initialValue]) => {
-    const currentValue = values[key as keyof CafeEditFormValues] ?? "";
-    return currentValue !== initialValue;
-  });
-}
-
-function buildCafePayload(values: CafeEditFormValues): CafeWriteRequest {
-  const logoUrl = values.logo_url?.trim();
-
-  return {
-    name: values.name?.trim() ?? "",
-    description: values.description?.trim() ?? "",
-    location: values.location?.trim() ?? "",
-    ...(logoUrl ? { logo_url: logoUrl } : {}),
-  };
-}
+import {
+  buildCafeWritePayload,
+  CafeFormFields,
+  type CafeFormValues,
+  hasDirtyCafeFormValues,
+  normalizeCafeFormValues,
+} from "@/routes/cafes/cafeForm";
 
 export function CafeEditRoute() {
   const { modal } = App.useApp();
-  const [form] = Form.useForm<CafeEditFormValues>();
+  const [form] = Form.useForm<CafeFormValues>();
   const formValues = Form.useWatch([], form);
   const allowNavigationRef = useRef(false);
   const queryClient = useQueryClient();
@@ -74,7 +38,9 @@ export function CafeEditRoute() {
       return null;
     }
 
-    return normalizeFormValues(cafeQuery.data);
+    // Edit starts from the backend detail payload, then the shared helper
+    // normalizes optional fields into the same shape used by the form.
+    return normalizeCafeFormValues(cafeQuery.data);
   }, [cafeQuery.data]);
 
   useEffect(() => {
@@ -86,7 +52,7 @@ export function CafeEditRoute() {
     allowNavigationRef.current = false;
   }, [form, initialValues]);
 
-  const isDirty = hasDirtyValues(formValues, initialValues);
+  const isDirty = hasDirtyCafeFormValues(formValues, initialValues);
 
   useBeforeUnload((event) => {
     if (!isDirty || allowNavigationRef.current) {
@@ -109,6 +75,8 @@ export function CafeEditRoute() {
     mutationFn: (values: CafeWriteRequest) => updateCafe(id ?? "", values),
     onSuccess: async () => {
       allowNavigationRef.current = true;
+      // Update returns to the list, so both list and detail caches are
+      // invalidated before navigation to avoid stale hosted-latency reads.
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["cafes", "list"] }),
         queryClient.invalidateQueries({ queryKey: ["cafes", "detail", id] }),
@@ -135,10 +103,10 @@ export function CafeEditRoute() {
     },
   });
 
-  const handleFinish: FormProps<CafeEditFormValues>["onFinish"] = (values) => {
+  const handleFinish: FormProps<CafeFormValues>["onFinish"] = (values) => {
     updateCafeMutation.reset();
     deleteCafeMutation.reset();
-    updateCafeMutation.mutate(buildCafePayload(values));
+    updateCafeMutation.mutate(buildCafeWritePayload(values));
   };
 
   const handleDelete = () => {
@@ -187,75 +155,18 @@ export function CafeEditRoute() {
           errorTitle="Unable to load cafe details"
           errorDescription="The backend did not complete this cafe detail read. Retry when the service is reachable again."
         >
-          <Form<CafeEditFormValues>
+          <CafeFormFields
             form={form}
-            layout="vertical"
+            initialValues={initialValues ?? undefined}
             onFinish={handleFinish}
             onValuesChange={() => {
               allowNavigationRef.current = false;
             }}
-            autoComplete="off"
-          >
-            <Form.Item
-              label="Name"
-              name="name"
-              rules={[{ required: true, whitespace: true, message: "Enter a cafe name." }]}
-            >
-              <Input placeholder="Central Perk" />
-            </Form.Item>
-            <Form.Item
-              label="Description"
-              name="description"
-              rules={[{ required: true, whitespace: true, message: "Enter a description." }]}
-            >
-              <Input.TextArea rows={4} placeholder="Describe the cafe." />
-            </Form.Item>
-            <Form.Item
-              label="Location"
-              name="location"
-              rules={[{ required: true, whitespace: true, message: "Enter a location." }]}
-            >
-              <Input placeholder="Central Business District" />
-            </Form.Item>
-            <Form.Item label="Logo URL" name="logo_url">
-              <Input placeholder="https://example.com/logo.png" />
-            </Form.Item>
-            {updateCafeMutation.isError ? (
-              <Alert
-                type="error"
-                showIcon
-                message="Unable to update cafe"
-                description={
-                  updateCafeMutation.error instanceof ApiError
-                    ? updateCafeMutation.error.message
-                    : "The backend rejected the update."
-                }
-                style={{ marginBottom: 24 }}
-              />
-            ) : null}
-            {deleteCafeMutation.isError ? (
-              <Alert
-                type="error"
-                showIcon
-                message="Unable to delete cafe"
-                description={
-                  deleteCafeMutation.error instanceof ApiError
-                    ? deleteCafeMutation.error.message
-                    : "The backend rejected the delete request."
-                }
-                style={{ marginBottom: 24 }}
-              />
-            ) : null}
-            <Space>
-              <Button
-                type="primary"
-                htmlType="submit"
-                loading={updateCafeMutation.isPending}
-                disabled={deleteCafeMutation.isPending}
-              >
-                Save Changes
-              </Button>
-              <Button onClick={() => navigate("/cafes")}>Cancel</Button>
+            submitLabel="Save Changes"
+            submitLoading={updateCafeMutation.isPending}
+            onCancel={() => navigate("/cafes")}
+            cancelDisabled={deleteCafeMutation.isPending}
+            extraActions={
               <Button
                 danger
                 onClick={handleDelete}
@@ -264,8 +175,34 @@ export function CafeEditRoute() {
               >
                 Delete Cafe
               </Button>
-            </Space>
-          </Form>
+            }
+          />
+          {updateCafeMutation.isError ? (
+            <Alert
+              type="error"
+              showIcon
+              message="Unable to update cafe"
+              description={
+                updateCafeMutation.error instanceof ApiError
+                  ? updateCafeMutation.error.message
+                  : "The backend rejected the update."
+              }
+              style={{ marginTop: 24 }}
+            />
+          ) : null}
+          {deleteCafeMutation.isError ? (
+            <Alert
+              type="error"
+              showIcon
+              message="Unable to delete cafe"
+              description={
+                deleteCafeMutation.error instanceof ApiError
+                  ? deleteCafeMutation.error.message
+                  : "The backend rejected the delete request."
+              }
+              style={{ marginTop: 24 }}
+            />
+          ) : null}
         </QueryState>
       )}
     </PageFrame>

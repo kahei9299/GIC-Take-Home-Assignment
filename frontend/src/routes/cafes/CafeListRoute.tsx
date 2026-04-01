@@ -39,6 +39,8 @@ export function CafeListRoute() {
   const deleteCafeMutation = useMutation({
     mutationFn: (cafeId: string) => deleteCafe(cafeId),
     onSuccess: async () => {
+      // The list route owns direct-delete orchestration, so a single list
+      // invalidation is enough to refresh the visible grid after success.
       await queryClient.invalidateQueries({ queryKey: ["cafes", "list"] });
     },
   });
@@ -54,6 +56,8 @@ export function CafeListRoute() {
       cancelText: "Cancel",
       okButtonProps: { danger: true },
       onOk: async () => {
+        // The modal should stay open on success/failure handling without
+        // leaking rejected promises into the test/runtime environment.
         await deleteCafeMutation.mutateAsync(cafe.id).catch(() => undefined);
       },
     });

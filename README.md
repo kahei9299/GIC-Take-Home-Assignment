@@ -1,6 +1,6 @@
 # GIC-Take-Home-Assignment
 
-Current iteration: Increment 16, simplified cafe edit and delete page.
+Current iteration: Increment 17, completed cafe frontend slice hardening pass.
 
 ## What Exists
 
@@ -53,12 +53,12 @@ Current iteration: Increment 16, simplified cafe edit and delete page.
 - unit tests for shared error envelope handling
 - unit tests for cache disabled/fail-open behavior
 - `frontend/` React + Vite + TypeScript app scaffold
-- React Router app shell with live cafe list, create, and edit routes plus placeholder employee routes
+- React Router app shell with a completed cafe slice plus placeholder employee routes
 - TanStack Query provider with safe-read retry defaults for backend reads
-- Ant Design theme baseline with an AG Grid-backed cafe list page, direct list delete action, and standard cafe create/edit forms
+- Ant Design theme baseline with an AG Grid-backed cafe list page, direct list delete action, and shared cafe form wiring across create/edit routes
 - handwritten frontend API client layered on checked-in OpenAPI-generated types
 - frontend env examples for local, preview, and production backend targeting
-- frontend Vitest + Testing Library + MSW coverage for core cafe list/create/edit/delete flows, retry states, not-found handling, and dirty-form prompt wiring
+- frontend Vitest + Testing Library + MSW coverage for the completed cafe slice, hosted-style API base URLs, retry states, not-found handling, and dirty-form prompt wiring
 
 ## What Does Not Exist Yet
 
@@ -166,6 +166,7 @@ frontend/
         PageFrame.tsx
     routes/
       cafes/
+        cafeForm.tsx
       employees/
       shared/
     test/
@@ -259,7 +260,7 @@ Default local value:
 VITE_API_BASE_URL=http://localhost:8000
 ```
 
-Increment 16 keeps the backend authoritative for cafe filtering, cafe write validation, and delete semantics:
+Increment 17 finalizes the cafe frontend slice while keeping the backend authoritative for cafe filtering, cafe write validation, and delete semantics:
 
 - the cafe list page lives at `/cafes`
 - the cafe create page lives at `/cafes/new`
@@ -269,12 +270,14 @@ Increment 16 keeps the backend authoritative for cafe filtering, cafe write vali
 - the cafe list page supports direct delete from the actions column without navigating through the edit page
 - the create form only performs basic required-field checks before submitting to `POST /cafes`
 - the edit form loads cafe detail directly from `GET /cafes/{id}` for prefill and retryable direct navigation
+- create and edit share the same frontend cafe field rendering and payload-normalization rules
 - create and update submissions trim obvious whitespace, preserve entered values on failure, and return to `/cafes` on success
 - successful create, update, and delete flows invalidate the cafe list query so the list refetches with fresh backend data
 - the cafe detail query uses `["cafes", "detail", id]` and is invalidated after successful update or delete
 - delete confirmation on both the list page and edit page explicitly warns that deleting a cafe also removes employees currently assigned to it
 - direct edit loads show a dedicated not-found state when the backend returns `404`
 - list-page delete failures render inline above the grid without leaving `/cafes`
+- staging and production backend URLs continue to flow through `VITE_API_BASE_URL` without source changes
 - dirty-form protection uses browser prompts only for unload and route-leave confirmation
 - positive employee counts deep-link to `/employees?cafe_id=<uuid>`
 
@@ -304,7 +307,7 @@ The backend reads:
 
 ## Backend Contract
 
-The API routes and success payloads remain the source of truth in Increment 16. The frontend consumes checked-in TypeScript types generated from `backend/openapi.json`, while keeping request helpers handwritten. Error responses use a stable JSON envelope:
+The API routes and success payloads remain the source of truth in Increment 17. The frontend consumes checked-in TypeScript types generated from `backend/openapi.json`, while keeping request helpers handwritten. Error responses use a stable JSON envelope:
 
 ```json
 {
@@ -407,7 +410,7 @@ CORS_ALLOWED_ORIGINS=http://localhost:5173,https://staging-frontend.example.com,
 - Docker setup
 - deployment config
 
-## How To Test Increment 16
+## How To Test Increment 17
 
 From the repository root after activating your virtual environment:
 
@@ -435,11 +438,13 @@ Frontend coverage in this increment includes:
 - list-page delete failure rendering without leaving `/cafes`
 - successful cafe update with trimmed payload submission, list/detail invalidation, and return to `/cafes`
 - edit-page retryable read failure and recovery
+- slow list/detail read handling that keeps route state stable while backend responses are pending
 - edit-page not-found rendering on backend `404`
 - update failure rendering without clearing form values
 - destructive delete confirmation, delete success, and return to `/cafes`
 - delete failure rendering while staying on the edit page
 - dirty-form browser prompt wiring for create/edit unload and route transitions
+- staging-style absolute backend URL handling through `VITE_API_BASE_URL`
 - employee-count deep-link rendering
 - add/edit route navigation from the list page
 
