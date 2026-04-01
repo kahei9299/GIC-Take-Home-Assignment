@@ -1,6 +1,6 @@
 # GIC-Take-Home-Assignment
 
-Current iteration: Increment 18, employee list page with cafe deep-link filtering.
+Current iteration: Increment 19, employee create page with required cafe assignment.
 
 ## What Exists
 
@@ -53,12 +53,12 @@ Current iteration: Increment 18, employee list page with cafe deep-link filterin
 - unit tests for shared error envelope handling
 - unit tests for cache disabled/fail-open behavior
 - `frontend/` React + Vite + TypeScript app scaffold
-- React Router app shell with a completed cafe slice, a live employee list route, and placeholder employee write routes
+- React Router app shell with a completed cafe slice, a live employee list route, and a real employee create route
 - TanStack Query provider with safe-read retry defaults for backend reads
-- Ant Design theme baseline with AG Grid-backed cafe and employee list pages, cafe-style list toolbars, direct cafe list delete action, and shared cafe form wiring across create/edit routes
-- handwritten frontend API client layered on checked-in OpenAPI-generated types
+- Ant Design theme baseline with AG Grid-backed cafe and employee list pages, cafe-style list toolbars, direct cafe list delete action, shared cafe form wiring across create/edit routes, and shared employee form wiring for create with future edit reuse
+- handwritten frontend API client layered on checked-in OpenAPI-generated types, including employee create support
 - frontend env examples for local, preview, and production backend targeting
-- frontend Vitest + Testing Library + MSW coverage for the completed cafe slice plus employee list deep links, retry states, not-found handling, and dirty-form prompt wiring
+- frontend Vitest + Testing Library + MSW coverage for the completed cafe slice plus employee list deep links, employee create flows, retry states, not-found handling, and dirty-form prompt wiring
 
 ## What Does Not Exist Yet
 
@@ -173,6 +173,9 @@ frontend/
         CafeListRoute.tsx
         CafeListToolbar.tsx
       employees/
+        employeeForm.tsx
+        EmployeeCreateRoute.tsx
+        EmployeeEditRoute.tsx
         EmployeeListGrid.tsx
         EmployeeListRoute.tsx
         EmployeeListToolbar.tsx
@@ -798,22 +801,22 @@ pytest
 
 ## Current Increment
 
-Increment 14 adds the first real frontend business page on top of the completed backend:
+Increment 19 adds the first employee write flow on top of the completed backend and cafe frontend:
 
-- a live cafe list route at `/cafes`
-- backend-driven location filtering triggered explicitly from the UI
-- AG Grid-based cafe table using straightforward columns and actions
-- loading, empty, and retryable read-failure handling
-- employee-count deep links into `/employees?cafe_id=<uuid>`
+- a live employee create route at `/employees/new`
+- required initial cafe assignment aligned to the current backend contract
+- shared employee form helpers for dirty-state checks, payload trimming, and future edit-route reuse
+- retryable cafe-options loading before form entry
+- mutation-driven return to `/employees` with employee and cafe query invalidation
 - README and frontend test updates for the current slice
 
 ## Changes Since Previous Increment
 
-- replaced the cafe list placeholder with a real backend-backed page
-- simplified the frontend approach to keep filter state local and business logic in the backend
-- kept AG Grid usage minimal and explanation-friendly
-- reduced frontend tests to core flows and meaningful failure handling
-- updated README instructions for Increment 14 and end-to-end local verification
+- replaced the employee create placeholder with a real backend-backed form
+- kept employee assignment UI thin by requiring one explicit cafe selection rather than duplicating backend rules
+- reused the established cafe-route dirty-form and mutation patterns instead of adding new frontend abstractions
+- added frontend coverage for employee create success, validation, retry, failure, and unsaved-change prompts
+- updated README instructions for Increment 19 and the current frontend state
 
 ## Notes
 

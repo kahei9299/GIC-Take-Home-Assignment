@@ -75,6 +75,20 @@ export const defaultEmployeeFixtures = [
   },
 ];
 
+export const defaultEmployeeDetailFixtures = Object.fromEntries(
+  defaultEmployeeFixtures.map((employee) => [
+    employee.id,
+    {
+      name: employee.name,
+      email_address: employee.email_address,
+      phone_number: employee.phone_number,
+      gender: employee.gender,
+      cafe: employee.cafe,
+      cafe_id: employee.cafe_id,
+    },
+  ]),
+);
+
 function normalizeLocation(value: string | null) {
   return value?.trim().toLocaleLowerCase() ?? "";
 }
@@ -115,5 +129,21 @@ export const server = setupServer(
       : defaultEmployeeFixtures;
 
     return HttpResponse.json(employees);
+  }),
+  http.get(`${defaultApiBaseUrl}/employees/:id`, ({ params }) => {
+    const employee = defaultEmployeeDetailFixtures[String(params.id)];
+
+    if (!employee) {
+      return HttpResponse.json(
+        {
+          code: "RESOURCE_NOT_FOUND",
+          message: "Employee not found.",
+          details: null,
+        },
+        { status: 404 },
+      );
+    }
+
+    return HttpResponse.json(employee);
   }),
 );

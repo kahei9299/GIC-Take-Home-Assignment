@@ -4,8 +4,10 @@ import type {
   CafeListItem,
   CafeWriteRequest,
   CafeWriteResponse,
+  EmployeeCreateRequest,
   EmployeeDetail,
   EmployeeListItem,
+  EmployeeWriteResponse,
 } from "@/api/contracts";
 import { requestJson } from "@/api/http";
 
@@ -49,4 +51,11 @@ export function listEmployees(cafeId?: string) {
 
 export function getEmployee(id: string) {
   return requestJson<EmployeeDetail>(`/employees/${id}`);
+}
+
+export function createEmployee(payload: EmployeeCreateRequest) {
+  return requestJson<EmployeeWriteResponse>("/employees", {
+    method: "POST",
+    body: payload,
+  });
 }

@@ -1,15 +1,30 @@
-import { act, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { delay, http, HttpResponse } from "msw";
 
+import type { EmployeeListItem } from "@/api/contracts";
 import { BackendHealthCard } from "@/routes/shared/BackendHealthCard";
 import { renderRoute, renderWithProviders } from "@/test/renderApp";
 import {
   defaultCafeDetailFixtures,
   defaultCafeFixtures,
+  defaultEmployeeDetailFixtures,
   defaultEmployeeFixtures,
   server,
 } from "@/test/server";
+
+async function selectOption(label: string, option: string) {
+  const formItem = screen.getByText(label).closest(".ant-form-item");
+  const selector = formItem?.querySelector(".ant-select-selector");
+
+  if (!(selector instanceof HTMLElement)) {
+    throw new Error(`Unable to find select trigger for ${label}.`);
+  }
+
+  fireEvent.mouseDown(selector);
+  const listbox = await screen.findByRole("listbox");
+  await userEvent.click(within(listbox).getByRole("option", { name: option }));
+}
 
 describe("cafe list route", () => {
   it("renders the shell and the cafe list from the backend", async () => {
@@ -898,11 +913,210 @@ describe("shared routes and query state", () => {
     confirmSpy.mockRestore();
   });
 
-  it("keeps the employee create route placeholder wired for the next increment", async () => {
+  it("renders the employee create form fields and assignment options", async () => {
     renderRoute("/employees/new");
 
     expect(await screen.findByRole("heading", { name: "Create Employee" })).toBeInTheDocument();
-    expect(screen.getByText(/Employee create form deferred/i)).toBeInTheDocument();
+    expect(await screen.findByRole("textbox", { name: "Name" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Email" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Phone Number" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Gender" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Assigned Cafe" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create Employee" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+  });
+
+  it("blocks empty employee submission with required validation", async () => {
+    const user = userEvent.setup();
+    renderRoute("/employees/new");
+
+    await user.click(await screen.findByRole("button", { name: "Create Employee" }));
+
+    expect(await screen.findByText("Enter an employee name.")).toBeInTheDocument();
+    expect(screen.getByText("Enter an email address.")).toBeInTheDocument();
+    expect(screen.getByText("Enter a phone number.")).toBeInTheDocument();
+    expect(screen.getByText("Select a gender.")).toBeInTheDocument();
+    expect(screen.getByText("Select a cafe assignment.")).toBeInTheDocument();
+  });
+
+  it("creates an employee, trims the payload, invalidates queries, and returns to /employees", async () => {
+    const employees: EmployeeListItem[] = defaultEmployeeFixtures.map((employee) => ({
+      ...employee,
+      gender: employee.gender as EmployeeListItem["gender"],
+    }));
+    const requestedPayloads: Array<Record<string, unknown>> = [];
+    let employeeListRequestCount = 0;
+    let cafeListRequestCount = 0;
+
+    server.use(
+      http.get("http://localhost:8000/employees", () => {
+        employeeListRequestCount += 1;
+        return HttpResponse.json(employees);
+      }),
+      http.get("http://localhost:8000/cafes", () => {
+        cafeListRequestCount += 1;
+        return HttpResponse.json(defaultCafeFixtures);
+      }),
+      http.post("http://localhost:8000/employees", async ({ request }) => {
+        const payload = (await request.json()) as Record<string, unknown>;
+        requestedPayloads.push(payload);
+
+        const matchedCafe = defaultCafeFixtures.find((cafe) => cafe.id === payload.cafe_id);
+        const createdEmployee = {
+          id: "UI0000099",
+          name: String(payload.name),
+          email_address: String(payload.email_address),
+          phone_number: String(payload.phone_number),
+          gender: String(payload.gender) as EmployeeListItem["gender"],
+          days_worked: 0,
+          cafe: matchedCafe?.name ?? null,
+          cafe_id: typeof payload.cafe_id === "string" ? payload.cafe_id : null,
+        };
+
+        employees.unshift(createdEmployee);
+
+        return HttpResponse.json(createdEmployee, { status: 201 });
+      }),
+    );
+
+    const user = userEvent.setup();
+    const { router } = renderRoute("/employees");
+
+    expect(await screen.findByRole("gridcell", { name: "Alicia Tan" })).toBeInTheDocument();
+    expect(employeeListRequestCount).toBe(1);
+
+    await act(async () => {
+      await router.navigate("/employees/new");
+    });
+
+    await user.type(await screen.findByRole("textbox", { name: "Name" }), "  Yvonne Tan  ");
+    await user.type(screen.getByRole("textbox", { name: "Email" }), "  yvonne.tan@example.com  ");
+    await user.type(screen.getByRole("textbox", { name: "Phone Number" }), " 81239999 ");
+    await selectOption("Gender", "Female");
+    await selectOption("Assigned Cafe", "Central Perk");
+
+    await user.click(screen.getByRole("button", { name: "Create Employee" }));
+
+    await waitFor(() =>
+      expect(requestedPayloads).toEqual([
+        {
+          name: "Yvonne Tan",
+          email_address: "yvonne.tan@example.com",
+          phone_number: "81239999",
+          gender: "Female",
+          cafe_id: "cafe-central-1",
+        },
+      ]),
+    );
+    expect(await screen.findByRole("heading", { name: "Employees" })).toBeInTheDocument();
+    expect(await screen.findByRole("gridcell", { name: "Yvonne Tan" })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/employees");
+    expect(employeeListRequestCount).toBe(2);
+    expect(cafeListRequestCount).toBe(2);
+  });
+
+  it("shows a backend employee-create failure without clearing the form", async () => {
+    server.use(
+      http.post("http://localhost:8000/employees", () =>
+        HttpResponse.json(
+          {
+            code: "CONFLICT",
+            message: "Employee email address or phone number already exists.",
+            details: null,
+          },
+          { status: 409 },
+        ),
+      ),
+    );
+
+    const user = userEvent.setup();
+    renderRoute("/employees/new");
+
+    await user.type(await screen.findByRole("textbox", { name: "Name" }), "Yvonne Tan");
+    await user.type(screen.getByRole("textbox", { name: "Email" }), "yvonne.tan@example.com");
+    await user.type(screen.getByRole("textbox", { name: "Phone Number" }), "81239999");
+    await selectOption("Gender", "Female");
+    await selectOption("Assigned Cafe", "Central Perk");
+    await user.click(screen.getByRole("button", { name: "Create Employee" }));
+
+    expect(await screen.findByText("Unable to create employee")).toBeInTheDocument();
+    expect(screen.getByText("Employee email address or phone number already exists.")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue("Yvonne Tan");
+    expect(screen.getByRole("textbox", { name: "Email" })).toHaveValue("yvonne.tan@example.com");
+    expect(screen.getByRole("textbox", { name: "Phone Number" })).toHaveValue("81239999");
+  });
+
+  it("returns to /employees when employee create cancel is clicked on a clean form", async () => {
+    const user = userEvent.setup();
+    renderRoute("/employees/new");
+
+    await user.click(await screen.findByRole("button", { name: "Cancel" }));
+
+    expect(await screen.findByRole("heading", { name: "Employees" })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/employees");
+  });
+
+  it("warns before leaving a dirty employee create form", async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    renderRoute("/employees/new");
+
+    await user.type(await screen.findByRole("textbox", { name: "Name" }), "Dirty Employee");
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(confirmSpy).toHaveBeenCalledWith("You have unsaved changes. Leave this page?");
+    expect(await screen.findByRole("heading", { name: "Create Employee" })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/employees/new");
+
+    const beforeUnloadEvent = new Event("beforeunload", { cancelable: true });
+    Object.defineProperty(beforeUnloadEvent, "returnValue", {
+      writable: true,
+      value: undefined,
+    });
+
+    window.dispatchEvent(beforeUnloadEvent);
+
+    expect(beforeUnloadEvent.defaultPrevented).toBe(true);
+    expect((beforeUnloadEvent as Event & { returnValue: unknown }).returnValue).toBe("");
+
+    confirmSpy.mockRestore();
+  });
+
+  it("shows a retryable cafe-options error state and recovers on retry", async () => {
+    let requestCount = 0;
+
+    server.use(
+      http.get("http://localhost:8000/cafes", () => {
+        requestCount += 1;
+
+        if (requestCount <= 3) {
+          return HttpResponse.error();
+        }
+
+        return HttpResponse.json(defaultCafeFixtures);
+      }),
+    );
+
+    const user = userEvent.setup();
+    renderRoute("/employees/new");
+
+    expect(await screen.findByText("Unable to load cafes")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Retry request" }));
+
+    expect(await screen.findByRole("combobox", { name: "Assigned Cafe" })).toBeInTheDocument();
+  });
+
+  it("serves employee detail fixtures for the next edit increment", async () => {
+    expect(defaultEmployeeDetailFixtures["UI0000010"]).toEqual({
+      name: "Alicia Tan",
+      email_address: "alicia.tan@example.com",
+      phone_number: "91234567",
+      gender: "Female",
+      cafe: "Central Perk",
+      cafe_id: "cafe-central-1",
+    });
   });
 
   it("shows a retryable error state for a failed safe read and recovers after retry", async () => {
