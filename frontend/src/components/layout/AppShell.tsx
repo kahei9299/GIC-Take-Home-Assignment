@@ -40,11 +40,11 @@ export function AppShell() {
             GIC Cafe Manager
           </Typography.Title>
           <Typography.Text style={{ color: "rgba(248, 255, 246, 0.78)" }}>
-            Cafe list and create slices on top of the hosted backend contract
+            Cafe list, create, and edit slices on top of the hosted backend contract
           </Typography.Text>
         </Space>
         <Tag color="green-inverse" bordered={false}>
-          Increment 15
+          Increment 16
         </Tag>
       </Header>
       <Layout>

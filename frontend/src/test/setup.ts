@@ -31,6 +31,13 @@ Object.defineProperty(window, "AbortSignal", {
   value: globalThis.AbortSignal,
 });
 
+const nativeGetComputedStyle = window.getComputedStyle.bind(window);
+
+Object.defineProperty(window, "getComputedStyle", {
+  writable: true,
+  value: (element: Element) => nativeGetComputedStyle(element),
+});
+
 const NativeRequest = globalThis.Request;
 
 class RequestMock extends NativeRequest {

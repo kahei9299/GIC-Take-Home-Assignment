@@ -30,6 +30,18 @@ export const defaultCafeFixtures = [
   },
 ];
 
+export const defaultCafeDetailFixtures = Object.fromEntries(
+  defaultCafeFixtures.map((cafe) => [
+    cafe.id,
+    {
+      name: cafe.name,
+      description: cafe.description,
+      logo_url: cafe.logo_url,
+      location: cafe.location,
+    },
+  ]),
+);
+
 function normalizeLocation(value: string | null) {
   return value?.trim().toLocaleLowerCase() ?? "";
 }
@@ -44,5 +56,21 @@ export const server = setupServer(
       : defaultCafeFixtures;
 
     return HttpResponse.json(cafes);
+  }),
+  http.get(`${defaultApiBaseUrl}/cafes/:id`, ({ params }) => {
+    const cafe = defaultCafeDetailFixtures[String(params.id)];
+
+    if (!cafe) {
+      return HttpResponse.json(
+        {
+          code: "RESOURCE_NOT_FOUND",
+          message: "Cafe not found.",
+          details: null,
+        },
+        { status: 404 },
+      );
+    }
+
+    return HttpResponse.json(cafe);
   }),
 );

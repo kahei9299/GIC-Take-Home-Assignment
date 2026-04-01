@@ -29,6 +29,19 @@ export function createCafe(payload: CafeWriteRequest) {
   });
 }
 
+export function updateCafe(id: string, payload: CafeWriteRequest) {
+  return requestJson<CafeWriteResponse>(`/cafes/${id}`, {
+    method: "PUT",
+    body: payload,
+  });
+}
+
+export function deleteCafe(id: string) {
+  return requestJson<void>(`/cafes/${id}`, {
+    method: "DELETE",
+  });
+}
+
 export function listEmployees(cafeId?: string) {
   const suffix = cafeId ? `?cafe_id=${encodeURIComponent(cafeId)}` : "";
   return requestJson<EmployeeListItem[]>(`/employees${suffix}`);

@@ -1,7 +1,7 @@
 import type { ColDef, ICellRendererParams, ValueFormatterParams } from "ag-grid-community";
 import type { CafeListItem } from "@/api/contracts";
 
-import { Button, Typography } from "antd";
+import { Button, Space, Typography } from "antd";
 import { AgGridReact } from "ag-grid-react";
 import { Link } from "react-router-dom";
 
@@ -9,9 +9,17 @@ import { defaultGridOptions } from "@/components/grid/defaultGridOptions";
 
 type CafeListGridProps = {
   cafes: CafeListItem[];
+  onDeleteCafe: (cafe: CafeListItem) => void;
+  deletingCafeId?: string | null;
 };
 
-function buildColumns(): ColDef<CafeListItem>[] {
+function buildColumns({
+  deletingCafeId,
+  onDeleteCafe,
+}: {
+  deletingCafeId?: string | null;
+  onDeleteCafe: (cafe: CafeListItem) => void;
+}): ColDef<CafeListItem>[] {
   const renderName = ({ data }: ICellRendererParams<CafeListItem>) =>
     data ? (
       <Typography.Text strong title={data.name}>
@@ -52,9 +60,23 @@ function buildColumns(): ColDef<CafeListItem>[] {
 
   const renderActions = ({ data }: ICellRendererParams<CafeListItem>) =>
     data ? (
-      <Button aria-label={`Edit ${data.name}`} href={`/cafes/${data.id}/edit`} size="small" type="default">
-        Edit
-      </Button>
+      <div style={{ display: "flex", alignItems: "center", height: "100%" }}>
+        <Space size={8}>
+        <Button aria-label={`Edit ${data.name}`} href={`/cafes/${data.id}/edit`} size="small" type="default">
+          Edit
+        </Button>
+        <Button
+          aria-label={`Delete ${data.name}`}
+          danger
+          size="small"
+          type="default"
+          loading={deletingCafeId === data.id}
+          onClick={() => onDeleteCafe(data)}
+        >
+          Delete
+        </Button>
+        </Space>
+      </div>
     ) : null;
 
   return [
@@ -100,11 +122,11 @@ function buildColumns(): ColDef<CafeListItem>[] {
   ];
 }
 
-export function CafeListGrid({ cafes }: CafeListGridProps) {
+export function CafeListGrid({ cafes, onDeleteCafe, deletingCafeId }: CafeListGridProps) {
   return (
     <div className="ag-theme-quartz" style={{ height: 420 }}>
       <AgGridReact<CafeListItem>
-        columnDefs={buildColumns()}
+        columnDefs={buildColumns({ deletingCafeId, onDeleteCafe })}
         gridOptions={defaultGridOptions}
         rowData={cafes}
       />

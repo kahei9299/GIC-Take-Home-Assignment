@@ -1,17 +1,21 @@
 import { useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
-import { Button, Card } from "antd";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Alert, App, Button, Card } from "antd";
 
-import { listCafes } from "@/api/client";
+import { deleteCafe, listCafes } from "@/api/client";
+import type { CafeListItem } from "@/api/contracts";
+import { ApiError } from "@/api/http";
 import { QueryState } from "@/components/feedback/QueryState";
 import { PageFrame } from "@/components/layout/PageFrame";
 import { CafeListGrid } from "@/routes/cafes/CafeListGrid";
 import { CafeListToolbar } from "@/routes/cafes/CafeListToolbar";
 
 export function CafeListRoute() {
+  const { modal } = App.useApp();
   const [committedLocation, setCommittedLocation] = useState("");
   const [locationDraft, setLocationDraft] = useState("");
+  const queryClient = useQueryClient();
 
   const cafesQuery = useQuery({
     // The backend stays responsible for location filtering; the frontend only
@@ -32,6 +36,29 @@ export function CafeListRoute() {
   const cafes = cafesQuery.data ?? [];
   const hasActiveFilter = committedLocation.length > 0;
 
+  const deleteCafeMutation = useMutation({
+    mutationFn: (cafeId: string) => deleteCafe(cafeId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["cafes", "list"] });
+    },
+  });
+
+  const handleDeleteCafe = (cafe: CafeListItem) => {
+    deleteCafeMutation.reset();
+
+    modal.confirm({
+      title: `Delete ${cafe.name}?`,
+      content:
+        "Deleting a cafe also removes employees who are currently assigned to it. This action cannot be undone.",
+      okText: "Delete Cafe",
+      cancelText: "Cancel",
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        await deleteCafeMutation.mutateAsync(cafe.id).catch(() => undefined);
+      },
+    });
+  };
+
   return (
     <PageFrame
       title="Cafes"
@@ -46,6 +73,19 @@ export function CafeListRoute() {
         onLocationDraftChange={setLocationDraft}
       />
       <Card>
+        {deleteCafeMutation.isError ? (
+          <Alert
+            type="error"
+            showIcon
+            message="Unable to delete cafe"
+            description={
+              deleteCafeMutation.error instanceof ApiError
+                ? deleteCafeMutation.error.message
+                : "The backend rejected the delete request."
+            }
+            style={{ marginBottom: 24 }}
+          />
+        ) : null}
         <QueryState
           empty={cafesQuery.isSuccess && cafes.length === 0}
           emptyDescription={
@@ -69,7 +109,11 @@ export function CafeListRoute() {
           pendingDescription="Loading the latest cafe list from the backend."
           pendingTitle="Loading cafes"
         >
-          <CafeListGrid cafes={cafes} />
+          <CafeListGrid
+            cafes={cafes}
+            deletingCafeId={deleteCafeMutation.isPending ? deleteCafeMutation.variables : null}
+            onDeleteCafe={handleDeleteCafe}
+          />
         </QueryState>
       </Card>
     </PageFrame>
