@@ -218,9 +218,7 @@ describe("employee list route", () => {
 
     expect(await screen.findByRole("heading", { name: "Employees" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Employee directory" })).toBeInTheDocument();
-    expect(
-      screen.getByText("Filter the loaded employee rows by cafe name while keeping any backend cafe deep link explicit."),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Filter the loaded employee rows by cafe name.")).toBeInTheDocument();
     expect(await screen.findByRole("gridcell", { name: "UI0000010" })).toBeInTheDocument();
     expect(screen.getByRole("gridcell", { name: "Alicia Tan" })).toBeInTheDocument();
     expect(screen.getByRole("gridcell", { name: "alicia.tan@example.com" })).toBeInTheDocument();
