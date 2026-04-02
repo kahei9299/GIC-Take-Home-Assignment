@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { Button, Form, Input, Select, Space } from "antd";
+import { Button, Form, Input, Radio, Select, Space } from "antd";
 import type { FormInstance, FormProps } from "antd";
 
 import type { CafeListItem, EmployeeCreateRequest, EmployeeDetail, EmployeeWriteRequest, Gender } from "@/api/contracts";
@@ -33,6 +33,22 @@ const GENDER_OPTIONS: Array<{ label: Gender; value: Gender }> = [
   { label: "Female", value: "Female" },
   { label: "Male", value: "Male" },
 ];
+
+async function validateTrimmedNameLength(value: string | undefined) {
+  const trimmed = value?.trim() ?? "";
+
+  if (!trimmed) {
+    return;
+  }
+
+  if (trimmed.length < 6) {
+    throw new Error("Employee name must be at least 6 characters.");
+  }
+
+  if (trimmed.length > 10) {
+    throw new Error("Employee name must be at most 10 characters.");
+  }
+}
 
 export function normalizeEmployeeFormValues(
   values: EmployeeFormValues | EmployeeDetail,
@@ -134,7 +150,14 @@ export function EmployeeFormFields({
       <Form.Item
         label="Name"
         name="name"
-        rules={[{ required: true, whitespace: true, message: "Enter an employee name." }]}
+        rules={[
+          { required: true, whitespace: true, message: "Enter an employee name." },
+          {
+            validator: async (_, value: string | undefined) => {
+              await validateTrimmedNameLength(value);
+            },
+          },
+        ]}
       >
         <Input placeholder="Alicia Tan" />
       </Form.Item>
@@ -181,7 +204,10 @@ export function EmployeeFormFields({
         <Input placeholder="91234567" />
       </Form.Item>
       <Form.Item label="Gender" name="gender" rules={[{ required: true, message: "Select a gender." }]}>
-        <Select placeholder="Select a gender" options={GENDER_OPTIONS} virtual={false} />
+        <Radio.Group
+          optionType="button"
+          options={GENDER_OPTIONS}
+        />
       </Form.Item>
       <Form.Item
         label="Assigned Cafe"

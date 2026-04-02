@@ -7,7 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, field_validator, model_validator
 
 from app.shared.enums import Gender
-from app.shared.validators import is_valid_email, is_valid_phone_number
+from app.shared.validators import MAX_NAME_LENGTH, MIN_NAME_LENGTH, is_valid_email, is_valid_phone_number
 
 
 class EmployeeListItem(BaseModel):
@@ -51,6 +51,8 @@ class EmployeeWriteRequest(BaseModel):
         trimmed = value.strip()
         if not trimmed:
             raise ValueError("Value must not be blank.")
+        if not MIN_NAME_LENGTH <= len(trimmed) <= MAX_NAME_LENGTH:
+            raise ValueError(f"Value must be between {MIN_NAME_LENGTH} and {MAX_NAME_LENGTH} characters.")
         return trimmed
 
     @field_validator("email_address")

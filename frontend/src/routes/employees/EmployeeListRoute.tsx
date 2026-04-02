@@ -17,14 +17,14 @@ export function EmployeeListRoute() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
-  const cafeId = searchParams.get("cafe_id") ?? "";
+  const cafeId = searchParams.get("cafe") ?? searchParams.get("cafe_id") ?? "";
   const [cafeNameDraft, setCafeNameDraft] = useState("");
   const [committedCafeName, setCommittedCafeName] = useState("");
   const [deletingEmployeeId, setDeletingEmployeeId] = useState<string | null>(null);
 
   const employeesQuery = useQuery({
-    // `cafe_id` is the stable deep-link contract from the cafe slice. The
-    // employee list only reflects it; the backend still owns the filter logic.
+    // `cafe` is the primary deep-link contract from the cafe slice; legacy
+    // `cafe_id` links are still accepted during the transition.
     queryKey: ["employees", "list", cafeId || null],
     queryFn: () => listEmployees(cafeId || undefined),
   });
@@ -129,7 +129,7 @@ export function EmployeeListRoute() {
             <Space wrap>
               <Tag color="green">Cafe filter active</Tag>
               {/* The deep-link filter stays outside the local toolbar so the
-                  backend-owned cafe_id state remains distinct from the local
+                  backend-owned cafe state remains distinct from the local
                   cafe-name filter applied to already loaded rows. */}
               <Typography.Text>{filterLabel}</Typography.Text>
               <Button size="small" onClick={() => navigate("/employees")}>

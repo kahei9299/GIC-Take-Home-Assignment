@@ -8,6 +8,12 @@ import string
 EMPLOYEE_ID_PATTERN = re.compile(r"^UI[A-Z0-9]{7}$")
 PHONE_PATTERN = re.compile(r"^[89]\d{7}$")
 EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+HTTP_LOGO_PATTERN = re.compile(r"^https?://", re.IGNORECASE)
+DATA_IMAGE_URL_PATTERN = re.compile(r"^data:image/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+$")
+
+MIN_NAME_LENGTH = 6
+MAX_NAME_LENGTH = 10
+MAX_CAFE_DESCRIPTION_LENGTH = 256
 
 
 def normalize_location(value: str) -> str:
@@ -32,6 +38,12 @@ def is_valid_email(value: str) -> bool:
     """Return whether the value looks like a pragmatic email address."""
 
     return bool(EMAIL_PATTERN.match(value))
+
+
+def is_valid_logo_value(value: str) -> bool:
+    """Return whether the value is an accepted persisted cafe logo string."""
+
+    return bool(HTTP_LOGO_PATTERN.match(value) or DATA_IMAGE_URL_PATTERN.match(value))
 
 
 def generate_employee_id() -> str:

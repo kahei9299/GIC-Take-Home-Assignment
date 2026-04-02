@@ -161,7 +161,7 @@ def test_cafe_update_bumps_cafe_and_employee_cache_versions(api_client, migrated
     response = api_client.put(
         f"/cafes/{cafe_id}",
         json={
-            "name": "Bugis Brew House Renamed",
+            "name": "BugisBrew",
             "description": "Compact commuter stop with brisk takeaway service.",
             "logo_url": None,
             "location": "Bugis",
@@ -176,7 +176,7 @@ def test_cafe_update_bumps_cafe_and_employee_cache_versions(api_client, migrated
 
     employees_response = api_client.get(f"/employees/{employee_id}")
     assert employees_response.status_code == 200
-    assert employees_response.json()["cafe"] == "Bugis Brew House Renamed"
+    assert employees_response.json()["cafe"] == "BugisBrew"
 
 
 def test_employee_reassignment_bumps_employee_and_cafe_list_versions(api_client, migrated_engine, monkeypatch) -> None:
@@ -233,7 +233,7 @@ def test_reads_and_writes_fail_open_when_redis_operations_fail(api_client, migra
     write_response = api_client.post(
         "/employees",
         json={
-            "name": "Cache Failure Tester",
+            "name": "CacheTest",
             "email_address": "cache.failure@example.com",
             "phone_number": "81237777",
             "gender": "Female",

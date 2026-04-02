@@ -54,7 +54,7 @@ function buildColumns({
     }
 
     // The employee count cell is the stable deep-link into the employee list.
-    return <Link to={`/employees?cafe_id=${encodeURIComponent(data.id)}`}>{`${data.employees} employees`}</Link>;
+    return <Link to={`/employees?cafe=${encodeURIComponent(data.id)}`}>{`${data.employees} employees`}</Link>;
   };
 
   const renderLogo = ({ data }: ICellRendererParams<CafeListItem>) =>

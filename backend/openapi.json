@@ -240,6 +240,23 @@
         "operationId": "list_employees_endpoint_employees_get",
         "parameters": [
           {
+            "name": "cafe",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cafe"
+            }
+          },
+          {
             "name": "cafe_id",
             "in": "query",
             "required": false,
@@ -596,9 +613,7 @@
           "logo_url": {
             "anyOf": [
               {
-                "type": "string",
-                "minLength": 1,
-                "format": "uri"
+                "type": "string"
               },
               {
                 "type": "null"

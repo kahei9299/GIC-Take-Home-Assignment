@@ -57,7 +57,7 @@ Current iteration: Increment 23, Dockerization and local container workflow.
 - React Router app shell with completed cafe and employee routes for list, create, edit, and delete workflows, now presented under the simplified `Cafe Manager` title without an increment badge in the UI
 - TanStack Query provider with safe-read retry defaults for backend reads
 - centralized frontend theme tokens and global warm-editorial styling for shared layout chrome, cards, toolbars, and light AG Grid wrapper polish
-- Ant Design theme baseline with AG Grid-backed cafe and employee list pages, cafe-style list toolbars, direct cafe and employee list delete actions, shared cafe form wiring across create/edit routes, and shared employee form wiring across create/edit with explicit unassign support
+- Ant Design theme baseline with AG Grid-backed cafe and employee list pages, cafe-style list toolbars, direct cafe and employee list delete actions, shared cafe form wiring across create/edit routes with real logo file upload + preview support, and shared employee form wiring across create/edit with explicit unassign support
 - small shared employee-route utilities for write-query invalidation and dirty-form leave guards
 - handwritten frontend API client layered on checked-in OpenAPI-generated types, including employee update and delete support
 - frontend env examples for local, preview, and production backend targeting
@@ -436,7 +436,8 @@ Increment 23 keeps the backend authoritative for cafe filtering, cafe and employ
 - the location filter is local UI state and is committed explicitly with `Apply`
 - the frontend does not apply business filtering locally after the backend responds
 - the cafe list page supports direct delete from the actions column without navigating through the edit page
-- the create form only performs basic required-field checks before submitting to `POST /cafes`
+- the cafe create/edit form enforces trimmed frontend validation for `name` length `6-10`, `description` max `256`, and logo file size max `2 MB`
+- cafe logo selection uses a real file picker, previews the selected image locally, and persists the value through the existing `logo_url` field as an image data URL
 - the edit form loads cafe detail directly from `GET /cafes/{id}` for prefill and retryable direct navigation
 - create and edit share the same frontend cafe field rendering and payload-normalization rules
 - create and update submissions trim obvious whitespace, preserve entered values on failure, and return to `/cafes` on success
@@ -449,9 +450,9 @@ Increment 23 keeps the backend authoritative for cafe filtering, cafe and employ
 - dirty-form protection uses browser prompts only for unload and route-leave confirmation
 - the visible app title is `Cafe Manager`
 - the visible app UI no longer shows an increment badge
-- positive employee counts deep-link to `/employees?cafe_id=<uuid>`
+- positive employee counts deep-link to `/employees?cafe=<uuid>`
 - the employee list page lives at `/employees`
-- `/employees?cafe_id=<uuid>` remains the deep-link contract from cafe employee counts
+- `/employees?cafe=<uuid>` is the primary deep-link contract from cafe employee counts, while legacy `cafe_id` links remain supported as a compatibility alias
 - the employee list fetches cafe detail separately to show a cafe name for the active filter label
 - if the cafe-name lookup fails, the employee list still loads with a generic filtered label
 - the employee list also supports a local cafe-name filter over the currently loaded employee rows
@@ -461,6 +462,8 @@ Increment 23 keeps the backend authoritative for cafe filtering, cafe and employ
 - the employee edit page lives at `/employees/:id/edit`
 - employee create requires an initial cafe assignment, while employee edit supports reassignment and explicit unassignment
 - employee create and edit share the same frontend employee field rendering and payload-normalization rules
+- employee name validation enforces trimmed length `6-10` on both frontend and backend
+- employee gender is rendered as a radio group with `Female` and `Male`
 - employee update and delete submissions preserve entered values on failure, invalidate employee/cafe queries on success, and return to `/employees`
 - employee edit loads employee detail directly from `GET /employees/{id}` for prefill and retryable direct navigation
 - employee delete confirmation on both the list page and edit page explicitly warns that deleting an employee also removes their assignment history
@@ -607,10 +610,21 @@ From the repository root after activating your virtual environment:
 
 ```bash
 cd backend
-pytest tests/unit/test_config.py tests/unit/test_database.py tests/unit/test_cache.py tests/integration/test_logging.py tests/integration/test_runtime_hardening.py tests/integration/test_health.py
+../.venv/bin/pytest tests/unit/test_config.py tests/unit/test_database.py tests/unit/test_cache.py tests/integration/test_logging.py tests/integration/test_runtime_hardening.py tests/integration/test_health.py
 cd ../frontend
 pnpm test
 pnpm build
+```
+
+To run the full PostgreSQL-backed backend suite under Docker Compose, create a separate disposable test database in the running Postgres container first:
+
+```bash
+docker compose up -d
+docker exec -it gic-take-home-assignment-postgres-1 \
+  psql -U postgres -d postgres -c "CREATE DATABASE gic_take_home_test;"
+export TEST_DATABASE_URL='postgresql+psycopg://postgres:postgres@localhost:55432/gic_take_home_test'
+cd backend
+../.venv/bin/pytest
 ```
 
 Deployment-specific verification:
@@ -627,7 +641,8 @@ Frontend coverage in this increment includes:
 - explicit location filtering through the backend
 - clear/reset local filter behavior
 - retryable safe-read failure and recovery
-- create form render and required-field validation
+- create form render, required-field validation, logo upload preview, logo preview fallback, and 2 MB logo size rejection
+- cafe name and description length validation
 - successful cafe create with trimmed payload submission, list invalidation, and return to `/cafes`
 - optional `logo_url` omission on create
 - create failure rendering without clearing form values
@@ -647,11 +662,11 @@ Frontend coverage in this increment includes:
 - employee-count deep-link rendering
 - add/edit cafe route navigation from the cafe list page
 - employee list render against backend-backed MSW responses
-- employee list deep-link filtering through `?cafe_id=<uuid>`
+- employee list deep-link filtering through `?cafe=<uuid>`
 - active employee filter label using cafe detail lookup
 - local employee cafe-name filtering and clear/reset behavior
 - employee list delete success and failure flows from the actions column
-- employee create success, validation, retry, failure, and unsaved-change prompt coverage
+- employee create success, validation, retry, failure, radio-group gender selection, and unsaved-change prompt coverage
 - direct employee edit-route detail loading and form prefill
 - successful employee update with trimmed payload submission, list/detail invalidation, and return to `/employees`
 - employee unassign support through the shared edit form
@@ -670,11 +685,11 @@ Frontend coverage in this increment includes:
 - centralized theme-module usage through the app provider and test renderer
 - updated shared page chrome, toolbar, and header styling under the `Cafe Manager` app title
 
-To run the full backend test suite:
+To run the full backend test suite from the backend directory:
 
 ```bash
 cd backend
-pytest
+../.venv/bin/pytest
 ```
 
 Example readiness payload with healthy PostgreSQL and degraded Redis:
@@ -754,7 +769,7 @@ Current read-path indexes:
 Current cache versioning:
 
 - cafes list keys vary by normalized `location`
-- employees list keys vary by `cafe_id`
+- employees list keys vary by effective cafe filter value
 - cafe detail keys are versioned per cafe ID
 - employee detail keys are versioned per employee ID
 
@@ -768,7 +783,7 @@ App endpoint:
 - Update cafe: `PUT http://127.0.0.1:8000/cafes/<uuid>`
 - Delete cafe: `DELETE http://127.0.0.1:8000/cafes/<uuid>`
 - Employees list: `http://127.0.0.1:8000/employees`
-- Employees by cafe: `http://127.0.0.1:8000/employees?cafe_id=<uuid>`
+- Employees by cafe: `http://127.0.0.1:8000/employees?cafe=<uuid>`
 - Employee detail: `http://127.0.0.1:8000/employees/<employee-id>`
 - Create employee: `POST http://127.0.0.1:8000/employees`
 - Update employee: `PUT http://127.0.0.1:8000/employees/<employee-id>`
@@ -804,7 +819,10 @@ curl http://localhost:8000/health/ready
 - type a location and click `Apply`
 - confirm the backend-filtered list updates
 - click `Clear` and confirm the full list returns
-- click an employee count link and confirm it targets `/employees?cafe_id=<uuid>`
+- click an employee count link and confirm it targets `/employees?cafe=<uuid>`
+- create or edit a cafe and confirm logo file selection works, the preview updates, and files over `2 MB` are rejected
+- create or edit a cafe and confirm the name must be `6-10` characters and description max is `256`
+- create or edit an employee and confirm gender uses radio buttons and employee name must be `6-10` characters
 - open `http://localhost:4173/employees`
 - confirm the employee list loads from the backend
 - confirm `Add Cafe` and row `Edit` links are visible
@@ -814,7 +832,7 @@ curl http://localhost:8000/health/ready
 ```bash
 . .venv/bin/activate
 cd backend
-pytest
+../.venv/bin/pytest
 cd ../frontend
 pnpm test
 pnpm build
@@ -858,8 +876,8 @@ Unit tests and health/readiness integration tests:
 ```bash
 . .venv/bin/activate
 cd backend
-pytest tests/integration/test_health.py
-pytest tests/unit
+../.venv/bin/pytest tests/integration/test_health.py
+../.venv/bin/pytest tests/unit
 ```
 
 Resilience-focused unit tests:
@@ -867,7 +885,7 @@ Resilience-focused unit tests:
 ```bash
 . .venv/bin/activate
 cd backend
-pytest tests/unit/test_resilience.py
+../.venv/bin/pytest tests/unit/test_resilience.py
 ```
 
 Schema verification tests against PostgreSQL:
@@ -875,7 +893,7 @@ Schema verification tests against PostgreSQL:
 ```bash
 . .venv/bin/activate
 cd backend
-pytest tests/integration/test_schema.py
+../.venv/bin/pytest tests/integration/test_schema.py
 ```
 
 Concurrent-write verification against PostgreSQL:
@@ -883,7 +901,7 @@ Concurrent-write verification against PostgreSQL:
 ```bash
 . .venv/bin/activate
 cd backend
-pytest tests/integration/test_concurrency.py
+../.venv/bin/pytest tests/integration/test_concurrency.py
 ```
 
 Cache integration tests against PostgreSQL:
@@ -891,7 +909,7 @@ Cache integration tests against PostgreSQL:
 ```bash
 . .venv/bin/activate
 cd backend
-pytest tests/integration/test_cache.py
+../.venv/bin/pytest tests/integration/test_cache.py
 ```
 
 Seed verification tests against PostgreSQL:
@@ -899,7 +917,7 @@ Seed verification tests against PostgreSQL:
 ```bash
 . .venv/bin/activate
 cd backend
-pytest tests/integration/test_seed.py
+../.venv/bin/pytest tests/integration/test_seed.py
 ```
 
 Cafe read integration tests against PostgreSQL:
@@ -907,7 +925,7 @@ Cafe read integration tests against PostgreSQL:
 ```bash
 . .venv/bin/activate
 cd backend
-pytest tests/integration/test_cafes.py
+../.venv/bin/pytest tests/integration/test_cafes.py
 ```
 
 Cafe write integration tests against PostgreSQL:
@@ -915,7 +933,7 @@ Cafe write integration tests against PostgreSQL:
 ```bash
 . .venv/bin/activate
 cd backend
-pytest tests/integration/test_cafe_writes.py
+../.venv/bin/pytest tests/integration/test_cafe_writes.py
 ```
 
 Employee read integration tests against PostgreSQL:
@@ -923,7 +941,7 @@ Employee read integration tests against PostgreSQL:
 ```bash
 . .venv/bin/activate
 cd backend
-pytest tests/integration/test_employees.py
+../.venv/bin/pytest tests/integration/test_employees.py
 ```
 
 Employee write integration tests against PostgreSQL:
@@ -931,7 +949,7 @@ Employee write integration tests against PostgreSQL:
 ```bash
 . .venv/bin/activate
 cd backend
-pytest tests/integration/test_employee_writes.py
+../.venv/bin/pytest tests/integration/test_employee_writes.py
 ```
 
 Logging and request ID integration tests:
@@ -939,7 +957,7 @@ Logging and request ID integration tests:
 ```bash
 . .venv/bin/activate
 cd backend
-pytest tests/integration/test_logging.py
+../.venv/bin/pytest tests/integration/test_logging.py
 ```
 
 Employee command service unit tests:
@@ -947,7 +965,7 @@ Employee command service unit tests:
 ```bash
 . .venv/bin/activate
 cd backend
-pytest tests/unit/test_employee_command_service.py
+../.venv/bin/pytest tests/unit/test_employee_command_service.py
 ```
 
 Shared error-handler unit tests:
@@ -955,7 +973,7 @@ Shared error-handler unit tests:
 ```bash
 . .venv/bin/activate
 cd backend
-pytest tests/unit/test_error_handlers.py
+../.venv/bin/pytest tests/unit/test_error_handlers.py
 ```
 
 Cache unit tests:
@@ -963,7 +981,7 @@ Cache unit tests:
 ```bash
 . .venv/bin/activate
 cd backend
-pytest tests/unit/test_cache.py
+../.venv/bin/pytest tests/unit/test_cache.py
 ```
 
 Run the full backend suite:
@@ -971,7 +989,7 @@ Run the full backend suite:
 ```bash
 . .venv/bin/activate
 cd backend
-pytest
+../.venv/bin/pytest
 ```
 
 ## Current Increment
@@ -983,11 +1001,15 @@ Increment 23 adds Dockerized local evaluation on top of the Increment 22 UI refr
 - root `docker-compose.yml` for backend, frontend, PostgreSQL, and Redis
 - container health checks aligned with `GET /health/ready`
 - README instructions for Docker startup, reset, smoke testing, and troubleshooting
-- existing cafe and employee workflows unchanged at the API and route-contract level
+- backend employee filtering now prefers the spec-aligned `?cafe=<uuid>` query param while still accepting legacy `cafe_id`
 - a live employee create route at `/employees/new`
 - a live employee edit route at `/employees/:id/edit`
 - direct employee delete from both the list route and the edit route
 - required initial cafe assignment on create plus explicit reassignment and unassignment on edit
+- cafe create/edit now uses a real logo file picker with local preview and a `2 MB` size limit
+- cafe and employee trimmed name validation now enforces the assignment-required `6-10` character range
+- cafe description validation now enforces a max length of `256`
+- employee gender selection now uses radio buttons
 - centralized frontend theme tokens and a shared global stylesheet for layout chrome
 - a warm-editorial visual refresh for the app shell, page frames, directory toolbars, and grid wrappers
 - simplified visible branding from `GIC Cafe Manager` to `Cafe Manager`
@@ -1010,6 +1032,7 @@ Increment 23 adds Dockerized local evaluation on top of the Increment 22 UI refr
 
 - PostgreSQL is required for migrations, schema-sensitive integration tests, the seed script, and the cafe and employee integration tests.
 - `TEST_DATABASE_URL` must point to a disposable PostgreSQL database for integration and concurrency tests; those suites skip when it is not set.
+- when running the PostgreSQL-backed integration suite under Docker Compose, create a separate disposable database such as `gic_take_home_test` inside the running Postgres container and export `TEST_DATABASE_URL` to that database before invoking `../.venv/bin/pytest` from `backend/`
 - Cafe deletion is intentionally destructive: it removes the cafe and employees currently assigned to it.
 - Employee creation now requires an initial cafe assignment, while updates may still unassign or reassign.
 - The shared error envelope shape remains intact, while domain `400` responses are now reserved for `INVALID_OPERATION` rather than overloading `VALIDATION_ERROR`.

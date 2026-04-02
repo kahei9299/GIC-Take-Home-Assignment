@@ -6,7 +6,7 @@ const defaultApiBaseUrl = "http://localhost:8000";
 export const defaultCafeFixtures = [
   {
     id: "cafe-central-1",
-    name: "Central Perk",
+    name: "Perk Hub",
     description: "Flagship cafe in the financial district.",
     logo_url: "https://placehold.co/320x192/f3eadf/7a4b2f/png?text=Central+Perk%0AFlagship&font=playfair-display",
     location: "Central Business District",
@@ -14,7 +14,7 @@ export const defaultCafeFixtures = [
   },
   {
     id: "cafe-central-2",
-    name: "Tanjong Brew",
+    name: "BrewStop",
     description: "Coffee bar near the downtown office cluster.",
     logo_url: null,
     location: "Central Business District",
@@ -22,7 +22,7 @@ export const defaultCafeFixtures = [
   },
   {
     id: "cafe-west-1",
-    name: "Harbour Grounds",
+    name: "HarbourGo",
     description: "Waterfront branch with all-day service.",
     logo_url: "https://placehold.co/320x192/e4f1f1/2f6f73/png?text=Harbour%0AGrounds&font=playfair-display",
     location: "Harbourfront",
@@ -50,7 +50,7 @@ export const defaultEmployeeFixtures = [
     phone_number: "91234567",
     gender: "Female",
     days_worked: 42,
-    cafe: "Central Perk",
+    cafe: "Perk Hub",
     cafe_id: "cafe-central-1",
   },
   {
@@ -60,7 +60,7 @@ export const defaultEmployeeFixtures = [
     phone_number: "92345678",
     gender: "Male",
     days_worked: 18,
-    cafe: "Harbour Grounds",
+    cafe: "HarbourGo",
     cafe_id: "cafe-west-1",
   },
   {
@@ -122,7 +122,7 @@ export const server = setupServer(
   }),
   http.get(`${defaultApiBaseUrl}/employees`, ({ request }) => {
     const url = new URL(request.url);
-    const requestedCafeId = url.searchParams.get("cafe_id");
+    const requestedCafeId = url.searchParams.get("cafe") ?? url.searchParams.get("cafe_id");
 
     const employees = requestedCafeId
       ? defaultEmployeeFixtures.filter((employee) => employee.cafe_id === requestedCafeId)

@@ -108,6 +108,28 @@ def test_post_employees_rejects_invalid_email_and_phone(api_client, migrated_eng
     assert response.json()["code"] == "VALIDATION_ERROR"
 
 
+def test_post_employees_rejects_invalid_name_length(api_client, migrated_engine, monkeypatch) -> None:
+    """Verify create enforces the assignment's employee name bounds."""
+
+    _seed_test_database(monkeypatch, migrated_engine)
+    with migrated_engine.begin() as connection:
+        cafe_id = connection.execute(text("SELECT id FROM cafes LIMIT 1")).scalar_one()
+
+    response = api_client.post(
+        "/employees",
+        json={
+            "name": "TooLongName",
+            "email_address": "yvonne.tan@example.com",
+            "phone_number": "81239999",
+            "gender": "Female",
+            "cafe_id": str(cafe_id),
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "VALIDATION_ERROR"
+
+
 def test_post_employees_rejects_unknown_cafe_id(api_client) -> None:
     """Verify create returns not found when the requested cafe does not exist."""
 
@@ -140,7 +162,7 @@ def test_post_employees_rejects_email_and_phone_conflicts(api_client, migrated_e
     response = api_client.post(
         "/employees",
         json={
-            "name": "Duplicate Alicia",
+            "name": "DupAlice",
             "email_address": "alicia.tan@example.com",
             "phone_number": "81230001",
             "gender": "Female",
@@ -206,7 +228,7 @@ def test_put_employees_same_cafe_preserves_assignment_continuity(api_client, mig
     response = api_client.put(
         f"/employees/{employee_id}",
         json={
-            "name": "Alicia Tan Updated",
+            "name": "AliciaUpd",
             "email_address": "alicia.tan.updated@example.com",
             "phone_number": "81238888",
             "gender": "Female",
@@ -383,7 +405,7 @@ def test_put_employees_returns_not_found_for_missing_employee(api_client) -> Non
     response = api_client.put(
         "/employees/UIZZZ9999",
         json={
-            "name": "Missing Employee",
+            "name": "Missing1",
             "email_address": "missing@example.com",
             "phone_number": "81239999",
             "gender": "Male",

@@ -24,13 +24,15 @@ router = APIRouter(prefix="/employees", tags=["employees"])
 
 @router.get("", response_model=list[EmployeeListItem])
 def list_employees_endpoint(
+    cafe: UUID | None = None,
     cafe_id: UUID | None = None,
     session: Session = Depends(get_db_session),
     cache: CacheClient = Depends(get_cache_client),
 ) -> list[EmployeeListItem]:
     """Return employees with an optional filter for their current cafe."""
 
-    return [EmployeeListItem.model_validate(employee) for employee in list_employees(session, cafe_id, cache)]
+    effective_cafe_id = cafe if cafe is not None else cafe_id
+    return [EmployeeListItem.model_validate(employee) for employee in list_employees(session, effective_cafe_id, cache)]
 
 
 @router.get("/{employee_id}", response_model=EmployeeDetail)

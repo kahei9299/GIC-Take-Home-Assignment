@@ -15,6 +15,15 @@ import {
 
 async function selectOption(label: string, option: string) {
   const formItem = screen.getByText(label).closest(".ant-form-item");
+  const formItemRoot = formItem instanceof HTMLElement ? formItem : document.body;
+  const radio = within(formItemRoot).queryByRole("radio", { name: option });
+
+  if (radio) {
+    const radioLabel = radio.closest("label");
+    fireEvent.click(radioLabel ?? radio);
+    return;
+  }
+
   const selector = formItem?.querySelector(".ant-select-selector");
 
   if (!(selector instanceof HTMLElement)) {
@@ -26,40 +35,50 @@ async function selectOption(label: string, option: string) {
   await userEvent.click(within(listbox).getByRole("option", { name: option }));
 }
 
+async function uploadCafeLogo(file: File) {
+  const input = document.querySelector('input[type="file"]');
+
+  if (!(input instanceof HTMLInputElement)) {
+    throw new Error("Unable to find cafe logo file input.");
+  }
+
+  await userEvent.upload(input, file);
+}
+
 describe("cafe list route", () => {
   it("renders the shell and the cafe list from the backend", async () => {
     renderRoute("/cafes");
 
     expect(await screen.findByRole("heading", { name: "Cafe Manager" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Cafes" })).toBeInTheDocument();
-    expect(await screen.findByRole("gridcell", { name: "Central Perk" })).toBeInTheDocument();
-    expect(screen.getByRole("gridcell", { name: "Harbour Grounds" })).toBeInTheDocument();
+    expect(await screen.findByRole("gridcell", { name: "Perk Hub" })).toBeInTheDocument();
+    expect(screen.getByRole("gridcell", { name: "HarbourGo" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "8 employees" })).toHaveAttribute(
       "href",
-      "/employees?cafe_id=cafe-central-1",
+      "/employees?cafe=cafe-central-1",
     );
     expect(screen.getByRole("link", { name: /Add Cafe/i })).toHaveAttribute("href", "/cafes/new");
-    expect(screen.getByRole("link", { name: "Edit Central Perk" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Edit Perk Hub" })).toHaveAttribute(
       "href",
       "/cafes/cafe-central-1/edit",
     );
-    expect(screen.getByRole("button", { name: "Delete Central Perk" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete Perk Hub" })).toBeInTheDocument();
   });
 
   it("renders image thumbnails and placeholders in the cafe grid", async () => {
     renderRoute("/cafes");
 
-    expect(await screen.findByRole("img", { name: "Central Perk logo" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Tanjong Brew logo placeholder")).toBeInTheDocument();
+    expect(await screen.findByRole("img", { name: "Perk Hub logo" })).toBeInTheDocument();
+    expect(screen.getByLabelText("BrewStop logo placeholder")).toBeInTheDocument();
   });
 
   it("falls back cleanly when a cafe logo image fails to load", async () => {
     renderRoute("/cafes");
 
-    const logo = await screen.findByRole("img", { name: "Central Perk logo" });
+    const logo = await screen.findByRole("img", { name: "Perk Hub logo" });
     fireEvent.error(logo);
 
-    expect(screen.getByLabelText("Central Perk logo placeholder")).toBeInTheDocument();
+    expect(screen.getByLabelText("Perk Hub logo placeholder")).toBeInTheDocument();
   });
 
   it("shows a loading state before the cafe list resolves", async () => {
@@ -73,7 +92,7 @@ describe("cafe list route", () => {
     renderRoute("/cafes");
 
     expect(screen.getByText("Loading cafes")).toBeInTheDocument();
-    expect(await screen.findByRole("gridcell", { name: "Central Perk" })).toBeInTheDocument();
+    expect(await screen.findByRole("gridcell", { name: "Perk Hub" })).toBeInTheDocument();
   });
 
   it("keeps typing local until apply is clicked, then asks the backend for the filtered list", async () => {
@@ -96,7 +115,7 @@ describe("cafe list route", () => {
     const user = userEvent.setup();
     renderRoute("/cafes");
 
-    expect(await screen.findByRole("gridcell", { name: "Central Perk" })).toBeInTheDocument();
+    expect(await screen.findByRole("gridcell", { name: "Perk Hub" })).toBeInTheDocument();
     expect(requestedLocations).toEqual([""]);
 
     await user.type(screen.getByRole("textbox", { name: "Location filter" }), "Harbourfront");
@@ -106,23 +125,23 @@ describe("cafe list route", () => {
     await user.click(screen.getByRole("button", { name: "Apply" }));
 
     await waitFor(() => expect(requestedLocations).toEqual(["", "Harbourfront"]));
-    expect(await screen.findByRole("gridcell", { name: "Harbour Grounds" })).toBeInTheDocument();
-    expect(screen.queryByRole("gridcell", { name: "Central Perk" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("gridcell", { name: "HarbourGo" })).toBeInTheDocument();
+    expect(screen.queryByRole("gridcell", { name: "Perk Hub" })).not.toBeInTheDocument();
   });
 
   it("clears the local filter and returns to the full list", async () => {
     const user = userEvent.setup();
     renderRoute("/cafes");
 
-    expect(await screen.findByRole("gridcell", { name: "Central Perk" })).toBeInTheDocument();
+    expect(await screen.findByRole("gridcell", { name: "Perk Hub" })).toBeInTheDocument();
 
     await user.type(screen.getByRole("textbox", { name: "Location filter" }), "Harbourfront");
     await user.click(screen.getByRole("button", { name: "Apply" }));
-    await screen.findByRole("gridcell", { name: "Harbour Grounds" });
+    await screen.findByRole("gridcell", { name: "HarbourGo" });
 
     await user.click(screen.getByRole("button", { name: "Clear" }));
 
-    await screen.findByRole("gridcell", { name: "Central Perk" });
+    await screen.findByRole("gridcell", { name: "Perk Hub" });
     expect(screen.getByRole("textbox", { name: "Location filter" })).toHaveValue("");
   });
 
@@ -148,7 +167,7 @@ describe("cafe list route", () => {
 
     await user.click(screen.getByRole("button", { name: "Retry request" }));
 
-    expect(await screen.findByRole("gridcell", { name: "Central Perk" })).toBeInTheDocument();
+    expect(await screen.findByRole("gridcell", { name: "Perk Hub" })).toBeInTheDocument();
   });
 
   it("keeps the cafe list stable while a slow backend read is pending", async () => {
@@ -162,7 +181,7 @@ describe("cafe list route", () => {
     renderRoute("/cafes");
 
     expect(screen.getByText("Loading cafes")).toBeInTheDocument();
-    expect(await screen.findByRole("gridcell", { name: "Central Perk" })).toBeInTheDocument();
+    expect(await screen.findByRole("gridcell", { name: "Perk Hub" })).toBeInTheDocument();
   });
 
   it("deletes a cafe directly from the list after confirmation", async () => {
@@ -186,17 +205,17 @@ describe("cafe list route", () => {
     const user = userEvent.setup();
     renderRoute("/cafes");
 
-    expect(await screen.findByRole("gridcell", { name: "Central Perk" })).toBeInTheDocument();
+    expect(await screen.findByRole("gridcell", { name: "Perk Hub" })).toBeInTheDocument();
     expect(cafeListRequestCount).toBe(1);
 
-    await user.click(screen.getByRole("button", { name: "Delete Central Perk" }));
+    await user.click(screen.getByRole("button", { name: "Delete Perk Hub" }));
 
     expect(await screen.findByText(/removes employees who are currently assigned/i)).toBeInTheDocument();
 
     await user.click(await screen.findAllByRole("button", { name: "Delete Cafe" }).then((buttons) => buttons[0]));
 
     await waitFor(() => expect(deleteRequestCount).toBe(1));
-    expect(screen.queryByRole("gridcell", { name: "Central Perk" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("gridcell", { name: "Perk Hub" })).not.toBeInTheDocument();
     expect(cafeListRequestCount).toBe(2);
   });
 
@@ -217,9 +236,9 @@ describe("cafe list route", () => {
     const user = userEvent.setup();
     renderRoute("/cafes");
 
-    expect(await screen.findByRole("gridcell", { name: "Central Perk" })).toBeInTheDocument();
+    expect(await screen.findByRole("gridcell", { name: "Perk Hub" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Delete Central Perk" }));
+    await user.click(screen.getByRole("button", { name: "Delete Perk Hub" }));
     await user.click(await screen.findAllByRole("button", { name: "Delete Cafe" }).then((buttons) => buttons[0]));
 
     expect(await screen.findByText("Unable to delete cafe")).toBeInTheDocument();
@@ -240,7 +259,7 @@ describe("employee list route", () => {
     expect(screen.getByRole("gridcell", { name: "alicia.tan@example.com" })).toBeInTheDocument();
     expect(screen.getByRole("gridcell", { name: "91234567" })).toBeInTheDocument();
     expect(screen.getByRole("gridcell", { name: "42" })).toBeInTheDocument();
-    expect(screen.getByRole("gridcell", { name: "Central Perk" })).toBeInTheDocument();
+    expect(screen.getByRole("gridcell", { name: "Perk Hub" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Edit Alicia Tan" })).toHaveAttribute(
       "href",
       "/employees/UI0000010/edit",
@@ -251,13 +270,13 @@ describe("employee list route", () => {
     );
   });
 
-  it("honors the inbound cafe_id deep link and shows the cafe-name filter context", async () => {
+  it("honors the inbound cafe deep link and shows the cafe-name filter context", async () => {
     const requestedCafeIds: string[] = [];
 
     server.use(
       http.get("http://localhost:8000/employees", ({ request }) => {
         const url = new URL(request.url);
-        const cafeId = url.searchParams.get("cafe_id") ?? "";
+        const cafeId = url.searchParams.get("cafe") ?? "";
         requestedCafeIds.push(cafeId);
 
         const employees = cafeId
@@ -268,19 +287,19 @@ describe("employee list route", () => {
       }),
     );
 
-    renderRoute("/employees?cafe_id=cafe-central-1");
+    renderRoute("/employees?cafe=cafe-central-1");
 
     await waitFor(() => expect(requestedCafeIds).toEqual(["cafe-central-1"]));
-    expect(await screen.findByText("Showing employees currently assigned to Central Perk.")).toBeInTheDocument();
+    expect(await screen.findByText("Showing employees currently assigned to Perk Hub.")).toBeInTheDocument();
     expect(screen.getByRole("gridcell", { name: "Alicia Tan" })).toBeInTheDocument();
     expect(screen.queryByRole("gridcell", { name: "Marcus Lim" })).not.toBeInTheDocument();
   });
 
   it("clears the active employee filter back to /employees", async () => {
     const user = userEvent.setup();
-    renderRoute("/employees?cafe_id=cafe-central-1");
+    renderRoute("/employees?cafe=cafe-central-1");
 
-    expect(await screen.findByText("Showing employees currently assigned to Central Perk.")).toBeInTheDocument();
+    expect(await screen.findByText("Showing employees currently assigned to Perk Hub.")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Clear deep link" }));
 
@@ -310,7 +329,7 @@ describe("employee list route", () => {
 
     expect(await screen.findByRole("gridcell", { name: "Alicia Tan" })).toBeInTheDocument();
 
-    await user.type(screen.getByRole("textbox", { name: "Cafe name filter" }), "central");
+    await user.type(screen.getByRole("textbox", { name: "Cafe name filter" }), "perk");
     await user.click(screen.getByRole("button", { name: "Apply" }));
     expect(await screen.findByRole("gridcell", { name: "Alicia Tan" })).toBeInTheDocument();
     expect(screen.queryByRole("gridcell", { name: "Marcus Lim" })).not.toBeInTheDocument();
@@ -335,7 +354,7 @@ describe("employee list route", () => {
       ),
     );
 
-    renderRoute("/employees?cafe_id=cafe-central-1");
+    renderRoute("/employees?cafe=cafe-central-1");
 
     expect(await screen.findByText("Showing employees filtered by cafe.")).toBeInTheDocument();
     expect(await screen.findByRole("gridcell", { name: "Alicia Tan" })).toBeInTheDocument();
@@ -388,7 +407,7 @@ describe("employee list route", () => {
     server.use(
       http.get("http://localhost:8000/employees", ({ request }) => {
         const url = new URL(request.url);
-        const cafeId = url.searchParams.get("cafe_id");
+        const cafeId = url.searchParams.get("cafe");
 
         if (cafeId === "cafe-central-2") {
           return HttpResponse.json([]);
@@ -398,7 +417,7 @@ describe("employee list route", () => {
       }),
     );
 
-    renderRoute("/employees?cafe_id=cafe-central-2");
+    renderRoute("/employees?cafe=cafe-central-2");
 
     expect(await screen.findByText("No employees matched this cafe")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Clear deep link" })).toHaveLength(2);
@@ -499,41 +518,50 @@ describe("shared routes and query state", () => {
     expect(screen.getByRole("textbox", { name: "Name" })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Description" })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Location" })).toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: "Logo URL" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Choose Logo File/ })).toBeInTheDocument();
     expect(screen.getByText("Logo preview")).toBeInTheDocument();
     expect(screen.getByLabelText("Cafe logo preview placeholder")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Create Cafe" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
   });
 
-  it("updates the create form logo preview as the logo URL changes", async () => {
-    const user = userEvent.setup();
+  it("updates the create form logo preview as a file is selected", async () => {
     renderRoute("/cafes/new");
 
-    const input = await screen.findByRole("textbox", { name: "Logo URL" });
+    await screen.findByRole("button", { name: /Choose Logo File/ });
+    await uploadCafeLogo(new File(["logo"], "logo.png", { type: "image/png" }));
 
-    await user.type(input, "https://cdn.example.com/logo.png");
-
-    expect(screen.getByRole("img", { name: "Cafe logo preview" })).toHaveAttribute(
-      "src",
-      "https://cdn.example.com/logo.png",
+    await waitFor(() =>
+      expect(screen.getByRole("img", { name: "Cafe logo preview" })).toHaveAttribute(
+        "src",
+        expect.stringMatching(/^data:image\/png;base64,/),
+      ),
     );
-
-    await user.clear(input);
-
-    expect(screen.getByLabelText("Cafe logo preview placeholder")).toBeInTheDocument();
   });
 
   it("falls back when the create form logo preview image fails to load", async () => {
+    renderRoute("/cafes/new");
+
+    await screen.findByRole("button", { name: /Choose Logo File/ });
+    await uploadCafeLogo(new File(["logo"], "bad.png", { type: "image/png" }));
+
+    const preview = await screen.findByRole("img", { name: "Cafe logo preview" });
+    fireEvent.error(preview);
+
+    await waitFor(() => expect(screen.getByText("Preview unavailable")).toBeInTheDocument());
+  });
+
+  it("rejects logo files larger than 2 MB", async () => {
     const user = userEvent.setup();
     renderRoute("/cafes/new");
 
-    await user.type(await screen.findByRole("textbox", { name: "Logo URL" }), "https://cdn.example.com/bad.png");
+    const oversizedFile = new File(["logo"], "oversized.png", { type: "image/png" });
+    Object.defineProperty(oversizedFile, "size", { value: 2 * 1024 * 1024 + 1 });
 
-    const preview = screen.getByRole("img", { name: "Cafe logo preview" });
-    fireEvent.error(preview);
+    await uploadCafeLogo(oversizedFile);
+    await user.click(screen.getByRole("button", { name: "Create Cafe" }));
 
-    expect(screen.getByLabelText("Cafe logo preview placeholder")).toBeInTheDocument();
+    expect(await screen.findByText("Logo file must be 2 MB or smaller.")).toBeInTheDocument();
   });
 
   it("blocks empty submission with required-field validation", async () => {
@@ -545,6 +573,19 @@ describe("shared routes and query state", () => {
     expect(await screen.findByText("Enter a cafe name.")).toBeInTheDocument();
     expect(screen.getByText("Enter a description.")).toBeInTheDocument();
     expect(screen.getByText("Enter a location.")).toBeInTheDocument();
+  });
+
+  it("enforces cafe name and description length validation", async () => {
+    const user = userEvent.setup();
+    renderRoute("/cafes/new");
+
+    await user.type(await screen.findByRole("textbox", { name: "Name" }), "Short");
+    await user.type(screen.getByRole("textbox", { name: "Description" }), "x".repeat(257));
+    await user.type(screen.getByRole("textbox", { name: "Location" }), "Bugis");
+    await user.click(screen.getByRole("button", { name: "Create Cafe" }));
+
+    expect(await screen.findByText("Cafe name must be at least 6 characters.")).toBeInTheDocument();
+    expect(screen.getByText("Description must be at most 256 characters.")).toBeInTheDocument();
   });
 
   it("creates a cafe, trims the payload, invalidates the list query, and returns to /cafes", async () => {
@@ -588,7 +629,7 @@ describe("shared routes and query state", () => {
     const user = userEvent.setup();
     const { router } = renderRoute("/cafes");
 
-    expect(await screen.findByRole("gridcell", { name: "Central Perk" })).toBeInTheDocument();
+    expect(await screen.findByRole("gridcell", { name: "Perk Hub" })).toBeInTheDocument();
     expect(cafeListRequestCount).toBe(1);
 
     await act(async () => {
@@ -601,20 +642,21 @@ describe("shared routes and query state", () => {
 
     await user.click(screen.getByRole("button", { name: "Create Cafe" }));
 
-    await waitFor(() => expect(requestedPayloads).toEqual([
-      {
-        name: "New Cafe",
-        description: "New branch near the river.",
-        location: "River Valley",
-      },
-    ]));
+    await waitFor(() =>
+      expect(requestedPayloads).toHaveLength(1),
+    );
+    expect(requestedPayloads[0]).toMatchObject({
+      name: "New Cafe",
+      description: "New branch near the river.",
+      location: "River Valley",
+    });
     expect(await screen.findByRole("heading", { name: "Cafes" })).toBeInTheDocument();
     expect(await screen.findByRole("gridcell", { name: "New Cafe" })).toBeInTheDocument();
     expect(window.location.pathname).toBe("/cafes");
     expect(cafeListRequestCount).toBe(2);
   });
 
-  it("allows logo_url to be omitted from the create payload", async () => {
+  it("allows the logo field to be omitted from the create payload", async () => {
     const requestedPayloads: Array<Record<string, unknown>> = [];
 
     server.use(
@@ -624,7 +666,7 @@ describe("shared routes and query state", () => {
         return HttpResponse.json(
           {
             id: "cafe-no-logo",
-            name: "Logo Free Cafe",
+            name: "LogoFree",
             description: "No logo provided.",
             location: "Novena",
             logo_url: null,
@@ -637,7 +679,7 @@ describe("shared routes and query state", () => {
     const user = userEvent.setup();
     renderRoute("/cafes/new");
 
-    await user.type(await screen.findByRole("textbox", { name: "Name" }), "Logo Free Cafe");
+    await user.type(await screen.findByRole("textbox", { name: "Name" }), "LogoFree");
     await user.type(screen.getByRole("textbox", { name: "Description" }), "No logo provided.");
     await user.type(screen.getByRole("textbox", { name: "Location" }), "Novena");
     await user.click(screen.getByRole("button", { name: "Create Cafe" }));
@@ -645,7 +687,7 @@ describe("shared routes and query state", () => {
     await waitFor(() =>
       expect(requestedPayloads).toEqual([
         {
-          name: "Logo Free Cafe",
+          name: "LogoFree",
           description: "No logo provided.",
           location: "Novena",
         },
@@ -670,14 +712,14 @@ describe("shared routes and query state", () => {
     const user = userEvent.setup();
     renderRoute("/cafes/new");
 
-    await user.type(await screen.findByRole("textbox", { name: "Name" }), "Central Perk");
+    await user.type(await screen.findByRole("textbox", { name: "Name" }), "Perk Hub");
     await user.type(screen.getByRole("textbox", { name: "Description" }), "Duplicate name.");
     await user.type(screen.getByRole("textbox", { name: "Location" }), "Central Business District");
     await user.click(screen.getByRole("button", { name: "Create Cafe" }));
 
     expect(await screen.findByText("Unable to create cafe")).toBeInTheDocument();
     expect(screen.getByText("Name already exists.")).toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue("Central Perk");
+    expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue("Perk Hub");
     expect(screen.getByRole("textbox", { name: "Description" })).toHaveValue("Duplicate name.");
     expect(screen.getByRole("textbox", { name: "Location" })).toHaveValue(
       "Central Business District",
@@ -732,9 +774,6 @@ describe("shared routes and query state", () => {
     expect(
       screen.getByDisplayValue(defaultCafeDetailFixtures["cafe-central-1"].location),
     ).toBeInTheDocument();
-    expect(
-      screen.getByDisplayValue(defaultCafeDetailFixtures["cafe-central-1"].logo_url ?? ""),
-    ).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "Cafe logo preview" })).toHaveAttribute(
       "src",
       defaultCafeDetailFixtures["cafe-central-1"].logo_url ?? "",
@@ -749,7 +788,7 @@ describe("shared routes and query state", () => {
     const preview = await screen.findByRole("img", { name: "Cafe logo preview" });
     fireEvent.error(preview);
 
-    expect(screen.getByLabelText("Cafe logo preview placeholder")).toBeInTheDocument();
+    expect(screen.getByText("Preview unavailable")).toBeInTheDocument();
   });
 
   it("keeps direct edit navigation stable while the detail read is slow", async () => {
@@ -763,7 +802,7 @@ describe("shared routes and query state", () => {
     renderRoute("/cafes/cafe-central-1/edit");
 
     expect(screen.getByText("Loading cafe details")).toBeInTheDocument();
-    expect(await screen.findByDisplayValue("Central Perk")).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("Perk Hub")).toBeInTheDocument();
     expect(window.location.pathname).toBe("/cafes/cafe-central-1/edit");
   });
 
@@ -824,7 +863,7 @@ describe("shared routes and query state", () => {
     const user = userEvent.setup();
     const { router } = renderRoute("/cafes");
 
-    expect(await screen.findByRole("gridcell", { name: "Central Perk" })).toBeInTheDocument();
+    expect(await screen.findByRole("gridcell", { name: "Perk Hub" })).toBeInTheDocument();
     expect(cafeListRequestCount).toBe(1);
 
     await act(async () => {
@@ -833,26 +872,22 @@ describe("shared routes and query state", () => {
 
     const nameInput = await screen.findByRole("textbox", { name: "Name" });
     await user.clear(nameInput);
-    await user.type(nameInput, "  Central Perk Revamp  ");
+    await user.type(nameInput, "  PerkRevamp  ");
     await user.clear(screen.getByRole("textbox", { name: "Description" }));
     await user.type(screen.getByRole("textbox", { name: "Description" }), "  Refreshed flagship concept.  ");
     await user.clear(screen.getByRole("textbox", { name: "Location" }));
     await user.type(screen.getByRole("textbox", { name: "Location" }), "  Marina Bay  ");
-    await user.clear(screen.getByRole("textbox", { name: "Logo URL" }));
 
     await user.click(screen.getByRole("button", { name: "Save Changes" }));
 
-    await waitFor(() =>
-      expect(requestedPayloads).toEqual([
-        {
-          name: "Central Perk Revamp",
-          description: "Refreshed flagship concept.",
-          location: "Marina Bay",
-        },
-      ]),
-    );
+    await waitFor(() => expect(requestedPayloads).toHaveLength(1));
+    expect(requestedPayloads[0]).toMatchObject({
+      name: "PerkRevamp",
+      description: "Refreshed flagship concept.",
+      location: "Marina Bay",
+    });
     expect(await screen.findByRole("heading", { name: "Cafes" })).toBeInTheDocument();
-    expect(await screen.findByRole("gridcell", { name: "Central Perk Revamp" })).toBeInTheDocument();
+    expect(await screen.findByRole("gridcell", { name: "PerkRevamp" })).toBeInTheDocument();
     expect(window.location.pathname).toBe("/cafes");
     expect(cafeListRequestCount).toBe(2);
   });
@@ -879,7 +914,7 @@ describe("shared routes and query state", () => {
 
     await user.click(screen.getByRole("button", { name: "Retry request" }));
 
-    expect(await screen.findByDisplayValue("Central Perk")).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("Perk Hub")).toBeInTheDocument();
   });
 
   it("shows a clear not-found state when the cafe detail returns 404", async () => {
@@ -921,12 +956,12 @@ describe("shared routes and query state", () => {
 
     const nameInput = await screen.findByRole("textbox", { name: "Name" });
     await user.clear(nameInput);
-    await user.type(nameInput, "Central Perk Updated");
+    await user.type(nameInput, "PerkUpdt");
     await user.click(screen.getByRole("button", { name: "Save Changes" }));
 
     expect(await screen.findByText("Unable to update cafe")).toBeInTheDocument();
     expect(screen.getByText("Name already exists.")).toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue("Central Perk Updated");
+    expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue("PerkUpdt");
   });
 
   it("deletes a cafe after confirmation, invalidates queries, and returns to /cafes", async () => {
@@ -971,7 +1006,7 @@ describe("shared routes and query state", () => {
     const user = userEvent.setup();
     const { router } = renderRoute("/cafes");
 
-    expect(await screen.findByRole("gridcell", { name: "Central Perk" })).toBeInTheDocument();
+    expect(await screen.findByRole("gridcell", { name: "Perk Hub" })).toBeInTheDocument();
     expect(cafeListRequestCount).toBe(1);
 
     await act(async () => {
@@ -988,7 +1023,7 @@ describe("shared routes and query state", () => {
     expect(await screen.findByRole("heading", { name: "Cafes" })).toBeInTheDocument();
     await waitFor(() => expect(cafeListRequestCount).toBe(2));
     await waitFor(() =>
-      expect(screen.queryByRole("gridcell", { name: "Central Perk" })).not.toBeInTheDocument(),
+      expect(screen.queryByRole("gridcell", { name: "Perk Hub" })).not.toBeInTheDocument(),
     );
     expect(window.location.pathname).toBe("/cafes");
   });
@@ -1052,7 +1087,8 @@ describe("shared routes and query state", () => {
     expect(await screen.findByRole("textbox", { name: "Name" })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Email" })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Phone Number" })).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "Gender" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Female" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Male" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Assigned Cafe" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Create Employee" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
@@ -1069,6 +1105,20 @@ describe("shared routes and query state", () => {
     expect(screen.getByText("Enter a phone number.")).toBeInTheDocument();
     expect(screen.getByText("Select a gender.")).toBeInTheDocument();
     expect(screen.getByText("Select a cafe assignment.")).toBeInTheDocument();
+  });
+
+  it("enforces employee name length validation", async () => {
+    const user = userEvent.setup();
+    renderRoute("/employees/new");
+
+    await user.type(await screen.findByRole("textbox", { name: "Name" }), "Short");
+    await user.type(screen.getByRole("textbox", { name: "Email" }), "short@example.com");
+    await user.type(screen.getByRole("textbox", { name: "Phone Number" }), "81239999");
+    await selectOption("Gender", "Female");
+    await selectOption("Assigned Cafe", "Perk Hub");
+    await user.click(screen.getByRole("button", { name: "Create Employee" }));
+
+    expect(await screen.findByText("Employee name must be at least 6 characters.")).toBeInTheDocument();
   });
 
   it("creates an employee, trims the payload, invalidates queries, and returns to /employees", async () => {
@@ -1125,7 +1175,7 @@ describe("shared routes and query state", () => {
     await user.type(screen.getByRole("textbox", { name: "Email" }), "  yvonne.tan@example.com  ");
     await user.type(screen.getByRole("textbox", { name: "Phone Number" }), " 81239999 ");
     await selectOption("Gender", "Female");
-    await selectOption("Assigned Cafe", "Central Perk");
+    await selectOption("Assigned Cafe", "Perk Hub");
 
     await user.click(screen.getByRole("button", { name: "Create Employee" }));
 
@@ -1168,7 +1218,7 @@ describe("shared routes and query state", () => {
     await user.type(screen.getByRole("textbox", { name: "Email" }), "yvonne.tan@example.com");
     await user.type(screen.getByRole("textbox", { name: "Phone Number" }), "81239999");
     await selectOption("Gender", "Female");
-    await selectOption("Assigned Cafe", "Central Perk");
+    await selectOption("Assigned Cafe", "Perk Hub");
     await user.click(screen.getByRole("button", { name: "Create Employee" }));
 
     expect(await screen.findByText("Unable to create employee")).toBeInTheDocument();
@@ -1193,7 +1243,7 @@ describe("shared routes and query state", () => {
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
     renderRoute("/employees/new");
 
-    await user.type(await screen.findByRole("textbox", { name: "Name" }), "Dirty Employee");
+    await user.type(await screen.findByRole("textbox", { name: "Name" }), "DirtyEmp");
 
     await user.click(screen.getByRole("button", { name: "Cancel" }));
 
@@ -1251,7 +1301,7 @@ describe("shared routes and query state", () => {
     expect(
       screen.getByDisplayValue(defaultEmployeeDetailFixtures["UI0000010"].phone_number),
     ).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "Gender" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Female" })).toBeChecked();
     expect(screen.getByRole("combobox", { name: "Assigned Cafe" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save Changes" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Delete Employee" })).toBeInTheDocument();
@@ -1354,19 +1404,19 @@ describe("shared routes and query state", () => {
 
     const nameInput = await screen.findByRole("textbox", { name: "Name" });
     await user.clear(nameInput);
-    await user.type(nameInput, "  Alicia Tan Updated  ");
+    await user.type(nameInput, "  AliciaUp  ");
     await user.clear(screen.getByRole("textbox", { name: "Email" }));
     await user.type(screen.getByRole("textbox", { name: "Email" }), "  alicia.updated@example.com  ");
     await user.clear(screen.getByRole("textbox", { name: "Phone Number" }));
     await user.type(screen.getByRole("textbox", { name: "Phone Number" }), " 82345678 ");
-    await selectOption("Assigned Cafe", "Harbour Grounds");
+    await selectOption("Assigned Cafe", "HarbourGo");
 
     await user.click(screen.getByRole("button", { name: "Save Changes" }));
 
     await waitFor(() =>
       expect(requestedPayloads).toEqual([
         {
-          name: "Alicia Tan Updated",
+          name: "AliciaUp",
           email_address: "alicia.updated@example.com",
           phone_number: "82345678",
           gender: "Female",
@@ -1375,8 +1425,8 @@ describe("shared routes and query state", () => {
       ]),
     );
     expect(await screen.findByRole("heading", { name: "Employees" })).toBeInTheDocument();
-    expect(await screen.findByRole("gridcell", { name: "Alicia Tan Updated" })).toBeInTheDocument();
-    expect(screen.getAllByRole("gridcell", { name: "Harbour Grounds" }).length).toBeGreaterThan(0);
+    expect(await screen.findByRole("gridcell", { name: "AliciaUp" })).toBeInTheDocument();
+    expect(screen.getAllByRole("gridcell", { name: "HarbourGo" }).length).toBeGreaterThan(0);
     expect(window.location.pathname).toBe("/employees");
     expect(employeeListRequestCount).toBe(2);
     expect(cafeListRequestCount).toBe(2);
@@ -1496,12 +1546,12 @@ describe("shared routes and query state", () => {
 
     const nameInput = await screen.findByRole("textbox", { name: "Name" });
     await user.clear(nameInput);
-    await user.type(nameInput, "Alicia Tan Updated");
+    await user.type(nameInput, "AliciaUp");
     await user.click(screen.getByRole("button", { name: "Save Changes" }));
 
     expect(await screen.findByText("Unable to update employee")).toBeInTheDocument();
     expect(screen.getByText("Employee email address or phone number already exists.")).toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue("Alicia Tan Updated");
+    expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue("AliciaUp");
   });
 
   it("deletes an employee after confirmation, invalidates queries, and returns to /employees", async () => {

@@ -103,10 +103,10 @@ export function CafeEditRoute() {
     },
   });
 
-  const handleFinish: FormProps<CafeFormValues>["onFinish"] = (values) => {
+  const handleFinish: FormProps<CafeFormValues>["onFinish"] = async (values) => {
     updateCafeMutation.reset();
     deleteCafeMutation.reset();
-    updateCafeMutation.mutate(buildCafeWritePayload(values));
+    updateCafeMutation.mutate(await buildCafeWritePayload(values));
   };
 
   const handleDelete = () => {

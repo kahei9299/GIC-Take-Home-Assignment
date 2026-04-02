@@ -20,7 +20,7 @@ def test_post_cafes_creates_cafe_and_returns_saved_resource(api_client, migrated
     """Verify create returns 201 and persists the normalized location."""
 
     payload = {
-        "name": "Tiong Bahru Test Cafe",
+        "name": "TiongCafe",
         "description": "Neighbourhood spot for manual brew service.",
         "logo_url": "https://example.com/logos/tiong-bahru-test.png",
         "location": "  Tiong Bahru  ",
@@ -30,7 +30,7 @@ def test_post_cafes_creates_cafe_and_returns_saved_resource(api_client, migrated
 
     assert response.status_code == 201
     body = response.json()
-    assert body["name"] == "Tiong Bahru Test Cafe"
+    assert body["name"] == "TiongCafe"
     assert body["description"] == "Neighbourhood spot for manual brew service."
     assert body["logo_url"] == "https://example.com/logos/tiong-bahru-test.png"
     assert body["location"] == "Tiong Bahru"
@@ -48,7 +48,7 @@ def test_post_cafes_creates_cafe_and_returns_saved_resource(api_client, migrated
         ).mappings().one()
 
     assert dict(stored) == {
-        "name": "Tiong Bahru Test Cafe",
+        "name": "TiongCafe",
         "description": "Neighbourhood spot for manual brew service.",
         "logo_url": "https://example.com/logos/tiong-bahru-test.png",
         "location": "Tiong Bahru",
@@ -73,6 +73,40 @@ def test_post_cafes_rejects_blank_required_fields(api_client) -> None:
     assert response.json()["code"] == "VALIDATION_ERROR"
 
 
+def test_post_cafes_accepts_image_data_url(api_client) -> None:
+    """Verify create accepts a persisted image data URL."""
+
+    response = api_client.post(
+        "/cafes",
+        json={
+            "name": "LogoCafe",
+            "description": "Compact logo test cafe.",
+            "logo_url": "data:image/png;base64,ZmFrZQ==",
+            "location": "Bugis",
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["logo_url"] == "data:image/png;base64,ZmFrZQ=="
+
+
+def test_post_cafes_rejects_invalid_lengths_and_logo_value(api_client) -> None:
+    """Verify create enforces the assignment's name/description rules and logo format."""
+
+    response = api_client.post(
+        "/cafes",
+        json={
+            "name": "Short",
+            "description": "x" * 257,
+            "logo_url": "ftp://example.com/logo.png",
+            "location": "Bugis",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "VALIDATION_ERROR"
+
+
 def test_put_cafes_updates_fields_and_returns_saved_resource(api_client, migrated_engine, monkeypatch) -> None:
     """Verify updates replace all editable fields and recompute normalized location."""
 
@@ -85,7 +119,7 @@ def test_put_cafes_updates_fields_and_returns_saved_resource(api_client, migrate
     response = api_client.put(
         f"/cafes/{cafe_id}",
         json={
-            "name": "Bugis Brew House Revamp",
+            "name": "BugisUp",
             "description": "Refreshed concept with extended seating.",
             "logo_url": "https://example.com/logos/bugis-revamp.png",
             "location": "  Marina Bay  ",
@@ -95,7 +129,7 @@ def test_put_cafes_updates_fields_and_returns_saved_resource(api_client, migrate
     assert response.status_code == 200
     assert response.json() == {
         "id": str(cafe_id),
-        "name": "Bugis Brew House Revamp",
+        "name": "BugisUp",
         "description": "Refreshed concept with extended seating.",
         "logo_url": "https://example.com/logos/bugis-revamp.png",
         "location": "Marina Bay",
@@ -108,7 +142,7 @@ def test_put_cafes_updates_fields_and_returns_saved_resource(api_client, migrate
         ).mappings().one()
 
     assert dict(stored) == {
-        "name": "Bugis Brew House Revamp",
+        "name": "BugisUp",
         "description": "Refreshed concept with extended seating.",
         "logo_url": "https://example.com/logos/bugis-revamp.png",
         "location": "Marina Bay",
@@ -122,7 +156,7 @@ def test_put_cafes_returns_not_found_for_unknown_uuid(api_client) -> None:
     response = api_client.put(
         f"/cafes/{uuid4()}",
         json={
-            "name": "Missing Cafe",
+            "name": "Missing1",
             "description": "Should not exist.",
             "logo_url": None,
             "location": "Bugis",

@@ -46,7 +46,7 @@ export function deleteCafe(id: string) {
 }
 
 export function listEmployees(cafeId?: string) {
-  const suffix = cafeId ? `?cafe_id=${encodeURIComponent(cafeId)}` : "";
+  const suffix = cafeId ? `?cafe=${encodeURIComponent(cafeId)}` : "";
   return requestJson<EmployeeListItem[]>(`/employees${suffix}`);
 }
 

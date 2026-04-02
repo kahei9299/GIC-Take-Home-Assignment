@@ -4,6 +4,7 @@ from app.shared.validators import (
     generate_employee_id,
     is_valid_email,
     is_valid_employee_id,
+    is_valid_logo_value,
     is_valid_phone_number,
     normalize_location,
 )
@@ -48,6 +49,16 @@ def test_invalid_emails_fail_validation() -> None:
     assert is_valid_email("aliceexample.com") is False
     assert is_valid_email("alice@") is False
     assert is_valid_email("alice @example.com") is False
+
+
+def test_logo_value_accepts_http_and_data_urls() -> None:
+    assert is_valid_logo_value("https://example.com/logo.png") is True
+    assert is_valid_logo_value("data:image/png;base64,ZmFrZQ==") is True
+
+
+def test_logo_value_rejects_invalid_strings() -> None:
+    assert is_valid_logo_value("ftp://example.com/logo.png") is False
+    assert is_valid_logo_value("not-a-logo") is False
 
 
 def test_location_normalization_trims_and_lowercases() -> None:

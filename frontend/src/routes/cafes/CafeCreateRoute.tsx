@@ -58,9 +58,9 @@ export function CafeCreateRoute() {
     },
   });
 
-  const handleFinish: FormProps<CafeFormValues>["onFinish"] = (values) => {
+  const handleFinish: FormProps<CafeFormValues>["onFinish"] = async (values) => {
     createCafeMutation.reset();
-    createCafeMutation.mutate(buildCafeWritePayload(values));
+    createCafeMutation.mutate(await buildCafeWritePayload(values));
   };
 
   return (

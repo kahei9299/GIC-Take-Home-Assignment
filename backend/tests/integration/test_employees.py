@@ -45,14 +45,14 @@ def test_get_employees_includes_assigned_and_unassigned_rows(api_client, migrate
     assert any(row["cafe"] is None for row in rows)
 
 
-def test_get_employees_filters_by_cafe_id(api_client, migrated_engine, monkeypatch) -> None:
-    """Verify cafe filters return only employees with an active assignment at that cafe."""
+def test_get_employees_filters_by_cafe_query_param(api_client, migrated_engine, monkeypatch) -> None:
+    """Verify the spec query param returns only employees at the requested cafe."""
 
     _seed_test_database(monkeypatch, migrated_engine)
     cafes_response = api_client.get("/cafes", params={"location": "Bugis"})
     cafe_id = cafes_response.json()[0]["id"]
 
-    response = api_client.get("/employees", params={"cafe_id": cafe_id})
+    response = api_client.get("/employees", params={"cafe": cafe_id})
 
     assert response.status_code == 200
     rows = response.json()
@@ -62,10 +62,23 @@ def test_get_employees_filters_by_cafe_id(api_client, migrated_engine, monkeypat
     assert rows[0]["cafe_id"] == cafe_id
 
 
-def test_get_employees_returns_empty_list_for_unknown_cafe_id(api_client) -> None:
+def test_get_employees_still_supports_legacy_cafe_id_alias(api_client, migrated_engine, monkeypatch) -> None:
+    """Verify older deep links using cafe_id keep working."""
+
+    _seed_test_database(monkeypatch, migrated_engine)
+    cafes_response = api_client.get("/cafes", params={"location": "Bugis"})
+    cafe_id = cafes_response.json()[0]["id"]
+
+    response = api_client.get("/employees", params={"cafe_id": cafe_id})
+
+    assert response.status_code == 200
+    assert response.json()[0]["cafe_id"] == cafe_id
+
+
+def test_get_employees_returns_empty_list_for_unknown_cafe_filter(api_client) -> None:
     """Verify an unmatched cafe filter returns an empty list."""
 
-    response = api_client.get("/employees", params={"cafe_id": str(uuid4())})
+    response = api_client.get("/employees", params={"cafe": str(uuid4())})
 
     assert response.status_code == 200
     assert response.json() == []
