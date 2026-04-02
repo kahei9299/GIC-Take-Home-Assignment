@@ -11,17 +11,11 @@ type PageFrameProps = PropsWithChildren<{
 export function PageFrame({ title, description, aside, children }: PageFrameProps) {
   return (
     <Space direction="vertical" size={24} style={{ display: "flex" }}>
-      <Card
-        styles={{
-          body: {
-            background: "linear-gradient(135deg, rgba(20, 83, 45, 0.08), rgba(24, 144, 255, 0.04))",
-          },
-        }}
-      >
-        <Typography.Title level={2} style={{ marginTop: 0 }}>
+      <Card className="page-frame__hero">
+        <Typography.Title className="page-frame__title" level={2} style={{ marginTop: 0 }}>
           {title}
         </Typography.Title>
-        <Typography.Paragraph style={{ marginBottom: 0, maxWidth: 760 }}>
+        <Typography.Paragraph className="page-frame__description" style={{ marginBottom: 0, maxWidth: 760 }}>
           {description}
         </Typography.Paragraph>
       </Card>

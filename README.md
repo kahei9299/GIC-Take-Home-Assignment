@@ -1,6 +1,6 @@
 # GIC-Take-Home-Assignment
 
-Current iteration: Increment 21, employee frontend hardening and coverage.
+Current iteration: Increment 22, UI style and theme refresh before dockerisation and deployment.
 
 ## What Exists
 
@@ -53,8 +53,9 @@ Current iteration: Increment 21, employee frontend hardening and coverage.
 - unit tests for shared error envelope handling
 - unit tests for cache disabled/fail-open behavior
 - `frontend/` React + Vite + TypeScript app scaffold
-- React Router app shell with completed cafe and employee routes for list, create, edit, and delete workflows
+- React Router app shell with completed cafe and employee routes for list, create, edit, and delete workflows, now presented under the simplified `Cafe Manager` title without an increment badge in the UI
 - TanStack Query provider with safe-read retry defaults for backend reads
+- centralized frontend theme tokens and global warm-editorial styling for shared layout chrome, cards, toolbars, and light AG Grid wrapper polish
 - Ant Design theme baseline with AG Grid-backed cafe and employee list pages, cafe-style list toolbars, direct cafe and employee list delete actions, shared cafe form wiring across create/edit routes, and shared employee form wiring across create/edit with explicit unassign support
 - small shared employee-route utilities for write-query invalidation and dirty-form leave guards
 - handwritten frontend API client layered on checked-in OpenAPI-generated types, including employee update and delete support
@@ -155,6 +156,7 @@ frontend/
       env.ts
       queryClient.ts
       router.tsx
+      theme.ts
     components/
       feedback/
         QueryState.tsx
@@ -187,6 +189,7 @@ frontend/
       renderApp.tsx
       server.ts
       setup.ts
+    styles.css
   .env.example
   .env.preview.example
   .env.production.example
@@ -273,7 +276,7 @@ Default local value:
 VITE_API_BASE_URL=http://localhost:8000
 ```
 
-Increment 21 keeps the backend authoritative for cafe filtering, cafe and employee write validation, assignment semantics, and delete behavior while tightening the employee frontend internals:
+Increment 22 keeps the backend authoritative for cafe filtering, cafe and employee write validation, assignment semantics, and delete behavior while refreshing the frontend presentation layer:
 
 - the cafe list page lives at `/cafes`
 - the cafe create page lives at `/cafes/new`
@@ -292,6 +295,8 @@ Increment 21 keeps the backend authoritative for cafe filtering, cafe and employ
 - list-page delete failures render inline above the grid without leaving `/cafes`
 - staging and production backend URLs continue to flow through `VITE_API_BASE_URL` without source changes
 - dirty-form protection uses browser prompts only for unload and route-leave confirmation
+- the visible app title is `Cafe Manager`
+- the visible app UI no longer shows an increment badge
 - positive employee counts deep-link to `/employees?cafe_id=<uuid>`
 - the employee list page lives at `/employees`
 - `/employees?cafe_id=<uuid>` remains the deep-link contract from cafe employee counts
@@ -336,7 +341,7 @@ The backend reads:
 
 ## Backend Contract
 
-The API routes and success payloads remain the source of truth in Increment 21. The frontend consumes checked-in TypeScript types generated from `backend/openapi.json`, while keeping request helpers handwritten. Error responses use a stable JSON envelope:
+The API routes and success payloads remain the source of truth in Increment 22. The frontend consumes checked-in TypeScript types generated from `backend/openapi.json`, while keeping request helpers handwritten. Error responses use a stable JSON envelope:
 
 ```json
 {
@@ -439,7 +444,7 @@ CORS_ALLOWED_ORIGINS=http://localhost:5173,https://staging-frontend.example.com,
 - Docker setup
 - deployment config
 
-## How To Test Increment 21
+## How To Test Increment 22
 
 From the repository root after activating your virtual environment:
 
@@ -497,6 +502,8 @@ Frontend coverage in this increment includes:
 - employee list retryable failure and recovery
 - employee list empty states for unfiltered, deep-link-filtered, and local cafe-name-filtered reads
 - employee `Edit` links and `Add Employee` CTA rendering
+- centralized theme-module usage through the app provider and test renderer
+- updated shared page chrome, toolbar, and header styling under the `Cafe Manager` app title
 
 To run the full backend test suite:
 
@@ -823,24 +830,25 @@ pytest
 
 ## Current Increment
 
-Increment 21 hardens the completed employee slice on top of the finished backend and cafe/frontend feature work:
+Increment 22 refreshes the frontend style and theme before dockerisation and deployment:
 
 - a live employee create route at `/employees/new`
 - a live employee edit route at `/employees/:id/edit`
 - direct employee delete from both the list route and the edit route
 - required initial cafe assignment on create plus explicit reassignment and unassignment on edit
-- shared employee form helpers for dirty-state checks, payload trimming, and create/edit reuse
-- shared employee-route utilities for dirty-form leave guards and employee write invalidation
-- retryable employee-detail and cafe-options loading before edit form entry
-- behavior-preserving coverage additions for stabilized employee routes
+- centralized frontend theme tokens and a shared global stylesheet for layout chrome
+- a warm-editorial visual refresh for the app shell, page frames, directory toolbars, and grid wrappers
+- simplified visible branding from `GIC Cafe Manager` to `Cafe Manager`
+- removed the visible increment badge from the UI
 - README and frontend test updates for the current slice
 
 ## Changes Since Previous Increment
 
-- extracted small shared employee-route helpers for leave-guard wiring and write-query invalidation
-- kept employee list filtering, deep-link behavior, create/edit flows, and delete UX unchanged while reducing route duplication
-- added focused employee-route coverage for the hardening pass, including clean edit cancel navigation
-- updated README instructions and visible labels for Increment 21 and the stabilized employee frontend state
+- introduced a shared theme module and one global stylesheet instead of continuing inline style duplication
+- refreshed the app shell, page hero cards, directory toolbars, and AG Grid containers with a warmer editorial direction
+- renamed the visible app title to `Cafe Manager` and removed the increment badge from the UI
+- kept route behavior, deep links, backend contracts, and employee/cafe workflows unchanged while updating the presentation layer
+- updated README instructions for Increment 22 and the current frontend visual state
 
 ## Notes
 

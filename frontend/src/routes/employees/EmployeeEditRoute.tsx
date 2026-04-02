@@ -116,7 +116,7 @@ export function EmployeeEditRoute() {
   return (
     <PageFrame
       title="Edit Employee"
-      description="Load one employee by ID, update their editable fields, change or clear the current cafe assignment, and use the destructive delete flow when needed."
+      description="View and update employee details, including reassigning to a different cafe. Changes are not saved until the form is submitted."
     >
       {isNotFound || (!employeeQuery.isPending && !employeeQuery.isError && !employeeQuery.data) ? (
         <Result

@@ -1,5 +1,5 @@
 import { ApartmentOutlined, TeamOutlined } from "@ant-design/icons";
-import { Layout, Menu, Space, Tag, Typography } from "antd";
+import { Layout, Menu, Space, Typography } from "antd";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 const { Header, Content } = Layout;
@@ -22,43 +22,25 @@ export function AppShell() {
   const selectedKey = location.pathname.startsWith("/employees") ? "/employees" : "/cafes";
 
   return (
-    <Layout style={{ minHeight: "100vh" }}>
-      <Header
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 24,
-          background: "linear-gradient(135deg, #16351f, #245132)",
-          padding: "12px 24px 0",
-          height: 76,
-          lineHeight: "normal",
-        }}
-      >
-        <Space direction="vertical" size={0}>
-          <Typography.Title level={3} style={{ color: "#f8fff6", margin: 0 }}>
-            GIC Cafe Manager
+    <Layout className="app-shell">
+      <Header className="app-shell__header">
+        <Space className="app-shell__brand" direction="vertical" size={0}>
+          <Typography.Title className="app-shell__title" level={3}>
+            Cafe Manager
           </Typography.Title>
-          <Typography.Text style={{ color: "rgba(248, 255, 246, 0.78)" }}>
-            Stabilized cafe and employee workflows with shared route utilities, direct delete actions, and backend-owned assignment semantics
+          <Typography.Text className="app-shell__subtitle">
+            A warmer, simpler workspace for cafe and employee operations, with backend-owned filtering, assignment semantics, and direct management flows.
           </Typography.Text>
         </Space>
-        <Tag color="green-inverse" bordered={false}>
-          Increment 21
-        </Tag>
       </Header>
       <Layout>
         <Menu
+          className="app-shell__menu"
           mode="horizontal"
           selectedKeys={[selectedKey]}
           items={navItems}
-          style={{
-            paddingInline: 24,
-            borderBottom: "1px solid #dfe8dc",
-            background: "#fcfdfb",
-          }}
         />
-        <Content style={{ padding: 24 }}>
+        <Content className="app-shell__content">
           <Outlet />
         </Content>
       </Layout>

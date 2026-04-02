@@ -7,16 +7,7 @@ import { createBrowserRouter, RouterProvider } from "react-router-dom";
 
 import { createQueryClient } from "@/app/queryClient";
 import { appRoutes } from "@/app/router";
-
-const theme = {
-  token: {
-    colorPrimary: "#14532d",
-    colorBgLayout: "#f3f7f2",
-    colorBgContainer: "#ffffff",
-    borderRadius: 14,
-    fontFamily: "'Segoe UI', 'Helvetica Neue', sans-serif",
-  },
-};
+import { appTheme } from "@/app/theme";
 
 export function renderRoute(initialEntry: string) {
   window.history.replaceState({}, "", initialEntry);
@@ -28,7 +19,7 @@ export function renderRoute(initialEntry: string) {
   return {
     router,
     ...render(
-      <ConfigProvider theme={theme}>
+      <ConfigProvider theme={appTheme}>
         <AntApp>
           <QueryClientProvider client={queryClient}>
             <RouterProvider router={router} />
@@ -43,7 +34,7 @@ export function renderWithProviders(node: ReactNode) {
   const queryClient = createQueryClient();
 
   return render(
-    <ConfigProvider theme={theme}>
+    <ConfigProvider theme={appTheme}>
       <AntApp>
         <QueryClientProvider client={queryClient}>{node}</QueryClientProvider>
       </AntApp>

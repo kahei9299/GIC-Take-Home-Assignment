@@ -30,7 +30,7 @@ describe("cafe list route", () => {
   it("renders the shell and the cafe list from the backend", async () => {
     renderRoute("/cafes");
 
-    expect(await screen.findByRole("heading", { name: "GIC Cafe Manager" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Cafe Manager" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Cafes" })).toBeInTheDocument();
     expect(await screen.findByRole("gridcell", { name: "Central Perk" })).toBeInTheDocument();
     expect(screen.getByRole("gridcell", { name: "Harbour Grounds" })).toBeInTheDocument();

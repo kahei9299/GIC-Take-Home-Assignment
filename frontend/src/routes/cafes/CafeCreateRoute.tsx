@@ -66,7 +66,7 @@ export function CafeCreateRoute() {
   return (
     <PageFrame
       title="Create Cafe"
-      description="Capture the basic cafe fields, submit them to the backend, and return to the cafe list after a successful create."
+      description="Fill in the form below to create a new cafe."
     >
       <CafeFormFields
         form={form}

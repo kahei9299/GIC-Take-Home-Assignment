@@ -124,7 +124,7 @@ function buildColumns({
 
 export function CafeListGrid({ cafes, onDeleteCafe, deletingCafeId }: CafeListGridProps) {
   return (
-    <div className="ag-theme-quartz" style={{ height: 420 }}>
+    <div className="data-grid-shell ag-theme-quartz">
       <AgGridReact<CafeListItem>
         columnDefs={buildColumns({ deletingCafeId, onDeleteCafe })}
         gridOptions={defaultGridOptions}

@@ -128,7 +128,7 @@ export function EmployeeListGrid({
   deletingEmployeeId,
 }: EmployeeListGridProps) {
   return (
-    <div className="ag-theme-quartz" style={{ height: 420 }}>
+    <div className="data-grid-shell ag-theme-quartz">
       <AgGridReact<EmployeeListItem>
         columnDefs={buildColumns({ deletingEmployeeId, onDeleteEmployee })}
         gridOptions={defaultGridOptions}

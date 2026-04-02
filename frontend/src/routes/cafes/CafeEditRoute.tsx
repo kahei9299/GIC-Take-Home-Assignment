@@ -132,7 +132,7 @@ export function CafeEditRoute() {
   return (
     <PageFrame
       title="Edit Cafe"
-      description="Load one cafe by ID, edit the stored fields, and use the destructive delete flow when the backend contract allows it."
+      description="View and update cafe details, including name and location. Changes are not saved until the form is submitted."
     >
       {isNotFound || (!cafeQuery.isPending && !cafeQuery.isError && !cafeQuery.data) ? (
         <Result

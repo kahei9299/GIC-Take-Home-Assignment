@@ -113,7 +113,7 @@ export function EmployeeListRoute() {
   return (
     <PageFrame
       title="Employees"
-      description="Browse employee records, follow cafe deep links through the current assignment filter, and move into the next employee workflows from one stable list route."
+      description="Browse employee records, filter by cafe name, and manage employees by creating or deleting them."
     >
       <EmployeeListToolbar
         addEmployeeHref="/employees/new"

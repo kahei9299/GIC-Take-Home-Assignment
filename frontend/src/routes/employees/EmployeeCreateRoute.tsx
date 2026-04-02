@@ -55,7 +55,7 @@ export function EmployeeCreateRoute() {
   return (
     <PageFrame
       title="Create Employee"
-      description="Capture one employee, require the initial cafe assignment expected by the backend, and return to the employee list after a successful create."
+      description="Fill in the form below to create a new employee."
     >
       <QueryState
         isPending={cafesQuery.isPending}

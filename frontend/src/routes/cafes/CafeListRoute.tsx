@@ -66,7 +66,7 @@ export function CafeListRoute() {
   return (
     <PageFrame
       title="Cafes"
-      description="Browse the cafe list, send location filters to the backend, and use simple navigation into the next cafe and employee workflows."
+      description="Browse the cafe list, filter by location, and manage cafes by creating or deleting them."
     >
       <CafeListToolbar
         addCafeHref="/cafes/new"

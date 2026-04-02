@@ -19,20 +19,14 @@ export function EmployeeListToolbar({
   addEmployeeHref,
 }: EmployeeListToolbarProps) {
   return (
-    <Card
-      styles={{
-        body: {
-          background: "linear-gradient(180deg, rgba(20, 83, 45, 0.04), rgba(20, 83, 45, 0.01))",
-        },
-      }}
-    >
+    <Card className="directory-toolbar">
       <Flex align="center" justify="space-between" gap={16} wrap>
         <Space direction="vertical" size={4}>
-          <Typography.Title level={4} style={{ margin: 0 }}>
+          <Typography.Title className="directory-toolbar__title" level={4} style={{ margin: 0 }}>
             Employee directory
           </Typography.Title>
-          <Typography.Text type="secondary">
-            Filter the loaded employee rows by cafe name while keeping any backend cafe deep link explicit.
+          <Typography.Text className="directory-toolbar__copy" type="secondary">
+            Filter the loaded employee rows by cafe name.
           </Typography.Text>
         </Space>
         <Button href={addEmployeeHref} type="primary" icon={<PlusOutlined />} size="large">
