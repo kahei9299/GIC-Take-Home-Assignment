@@ -1,6 +1,6 @@
 # GIC-Take-Home-Assignment
 
-Current iteration: Increment 22, UI style and theme refresh before dockerisation and deployment.
+Current iteration: Increment 23, Dockerization and local container workflow.
 
 ## What Exists
 
@@ -11,6 +11,7 @@ Current iteration: Increment 22, UI style and theme refresh before dockerisation
 - SQLAlchemy persistence models for cafes, employees, and employee assignments
 - Alembic migration setup with the initial schema migration and Increment 9 read-path index migration
 - Seed script for demo and test-supporting data
+- backend Dockerfile and startup entrypoint for containerized local evaluation
 - Cafe read-side API modules for list and detail queries
 - Employee read-side API modules for list and detail queries
 - Cafe command-side API module for create, update, and delete flows
@@ -60,11 +61,12 @@ Current iteration: Increment 22, UI style and theme refresh before dockerisation
 - small shared employee-route utilities for write-query invalidation and dirty-form leave guards
 - handwritten frontend API client layered on checked-in OpenAPI-generated types, including employee update and delete support
 - frontend env examples for local, preview, and production backend targeting
+- frontend Dockerfile and nginx SPA config for static container serving
+- root Docker Compose stack for backend, frontend, PostgreSQL, and Redis
 - frontend Vitest + Testing Library + MSW coverage for the completed cafe slice plus employee list deep links, employee create/edit/delete flows, retry states, not-found handling, and dirty-form prompt wiring
 
 ## What Does Not Exist Yet
 
-- Docker setup
 - deployment config
 
 ## Backend Structure
@@ -104,6 +106,7 @@ backend/
       validators.py
     main.py
   scripts/
+    docker-entrypoint.sh
     seed.py
   alembic/
     env.py
@@ -135,6 +138,7 @@ backend/
       test_utils.py
       test_validators.py
   pyproject.toml
+  Dockerfile
 ```
 
 ## Frontend Structure
@@ -193,7 +197,10 @@ frontend/
   .env.example
   .env.preview.example
   .env.production.example
+  .dockerignore
+  Dockerfile
   index.html
+  nginx.conf
   package.json
   tsconfig.json
   vite.config.ts
@@ -214,12 +221,12 @@ pnpm install
 
 ## Database Prerequisites
 
-Increment 12 uses PostgreSQL for migrations, schema tests, the demo seed script, read/write integration tests, cache integration tests, readiness checks, and concurrent-write verification. Runtime settings are loaded from `backend/.env`.
+Increment 23 uses PostgreSQL for migrations, schema tests, the demo seed script, read/write integration tests, cache integration tests, readiness checks, and concurrent-write verification. Runtime settings are loaded from `backend/.env`.
 
 - local backend DB: set in `backend/.env` as `DATABASE_URL`
 - schema test DB: set `TEST_DATABASE_URL` to a separate PostgreSQL database you can safely migrate and downgrade during tests
 
-Primary Docker-first example:
+Primary local test-database example:
 
 ```bash
 cp backend/.env.example backend/.env
@@ -246,6 +253,58 @@ export TEST_DATABASE_URL='postgresql+psycopg://postgres:postgres@localhost:55432
 ```
 
 Local PostgreSQL is still supported, but it is no longer the primary documented path. If you use a local server instead of Docker, make sure both `DATABASE_URL` and `TEST_DATABASE_URL` match the actual local role, password, and database names on that machine.
+
+## Docker Workflow
+
+Increment 23 adds a full local container workflow for evaluation.
+
+From the repository root:
+
+```bash
+docker compose up --build
+```
+
+This starts:
+
+- PostgreSQL on `localhost:55432`
+- Redis on `localhost:6379`
+- backend API on `http://localhost:8000`
+- frontend app on `http://localhost:4173`
+
+Compose startup behavior:
+
+- waits for PostgreSQL and Redis to report healthy
+- applies `alembic upgrade head` automatically before the backend starts serving traffic
+- runs `python scripts/seed.py` automatically before the backend starts serving traffic
+- serves the frontend as a compiled static bundle, not a Vite dev server
+
+The automatic seed step is safe on restarts because the seed script is idempotent.
+
+The checked-in Docker build defaults use the standard public package registries so the workflow stays region-neutral for evaluators.
+
+If you are building from a network that struggles to reach Docker Hub, PyPI, or npm reliably, override the Docker build args locally with region-appropriate mirrors instead of changing the default submission path.
+
+Example restricted-network build override:
+
+```bash
+docker compose build \
+  --build-arg PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple \
+  --build-arg PIP_TRUSTED_HOST=pypi.tuna.tsinghua.edu.cn \
+  --build-arg NPM_REGISTRY=https://registry.npmmirror.com \
+  --build-arg PNPM_REGISTRY=https://registry.npmmirror.com
+docker compose up
+```
+
+Useful Docker commands:
+
+```bash
+docker compose up --build
+docker compose logs -f backend
+docker compose down
+docker compose down -v
+```
+
+Use `docker compose down -v` when you want to remove the persisted PostgreSQL and Redis volumes and rebuild the demo dataset from a clean state on the next startup.
 
 ## Run The Backend
 
@@ -276,7 +335,7 @@ Default local value:
 VITE_API_BASE_URL=http://localhost:8000
 ```
 
-Increment 22 keeps the backend authoritative for cafe filtering, cafe and employee write validation, assignment semantics, and delete behavior while refreshing the frontend presentation layer:
+Increment 23 keeps the backend authoritative for cafe filtering, cafe and employee write validation, assignment semantics, and delete behavior while adding a reproducible local container workflow:
 
 - the cafe list page lives at `/cafes`
 - the cafe create page lives at `/cafes/new`
@@ -441,10 +500,9 @@ CORS_ALLOWED_ORIGINS=http://localhost:5173,https://staging-frontend.example.com,
 
 ## What Still Does Not Exist
 
-- Docker setup
 - deployment config
 
-## How To Test Increment 22
+## How To Test Increment 23
 
 From the repository root after activating your virtual environment:
 
@@ -619,64 +677,35 @@ Expected liveness response:
 
 Use this flow when you want to verify the current delivered system end to end instead of only running isolated test suites.
 
-1. Start local PostgreSQL and Redis:
+1. Start the full Dockerized stack:
 
 ```bash
-docker rm -f gic-postgres-test gic-redis-test 2>/dev/null
-docker run -d --name gic-postgres-test \
-  -e POSTGRES_USER=postgres \
-  -e POSTGRES_PASSWORD=postgres \
-  -e POSTGRES_DB=cafe_manager \
-  -p 55432:5432 \
-  postgres:16-alpine
-docker run -d --name gic-redis-test -p 6379:6379 redis:7
-docker exec -it gic-postgres-test psql -U postgres -d postgres -c "CREATE DATABASE gic_take_home_test;"
+docker compose up --build
 ```
 
-2. Activate the virtual environment and export the integration-test database:
+2. Wait for backend readiness and confirm the health endpoints:
 
 ```bash
-. .venv/bin/activate
-export TEST_DATABASE_URL='postgresql+psycopg://postgres:postgres@localhost:55432/gic_take_home_test'
+curl http://localhost:8000/health
+curl http://localhost:8000/health/ready
 ```
 
-3. Apply migrations and seed demo data:
+3. Manually verify the current frontend increment in the browser:
 
-```bash
-cd backend
-alembic upgrade head
-python scripts/seed.py
-cd ..
-```
-
-4. Start the backend:
-
-```bash
-cd backend
-uvicorn app.main:app --reload
-```
-
-5. Start the frontend in another terminal:
-
-```bash
-cd frontend
-cp .env.example .env.local
-pnpm dev
-```
-
-6. Manually verify the current frontend increment in the browser:
-
-- open `http://localhost:5173/cafes`
+- open `http://localhost:4173/cafes`
 - confirm the cafe list loads from the backend
 - type a location and click `Apply`
 - confirm the backend-filtered list updates
 - click `Clear` and confirm the full list returns
 - click an employee count link and confirm it targets `/employees?cafe_id=<uuid>`
+- open `http://localhost:4173/employees`
+- confirm the employee list loads from the backend
 - confirm `Add Cafe` and row `Edit` links are visible
 
-7. Run the automated verification suites:
+4. Run the automated verification suites:
 
 ```bash
+. .venv/bin/activate
 cd backend
 pytest
 cd ../frontend
@@ -686,10 +715,20 @@ pnpm build
 
 This end-to-end path verifies:
 
-- backend boot, migrations, and seed flow
+- Docker image build and startup flow
+- backend boot, automatic migrations, and automatic seed flow
 - backend read/write API behavior and runtime hardening
 - frontend cafe list behavior for the current increment
+- frontend employee list behavior for the current increment
 - frontend production build output
+
+5. Shut the stack down when finished:
+
+```bash
+docker compose down
+```
+
+Use `docker compose down -v` if you want to remove the Docker volumes and fully recreate the seeded dataset on the next run.
 
 ## Run Tests
 
@@ -830,8 +869,14 @@ pytest
 
 ## Current Increment
 
-Increment 22 refreshes the frontend style and theme before dockerisation and deployment:
+Increment 23 adds Dockerized local evaluation on top of the Increment 22 UI refresh:
 
+- backend container startup with automatic migrations and demo seeding
+- frontend static bundle container served through nginx with SPA route fallback
+- root `docker-compose.yml` for backend, frontend, PostgreSQL, and Redis
+- container health checks aligned with `GET /health/ready`
+- README instructions for Docker startup, reset, smoke testing, and troubleshooting
+- existing cafe and employee workflows unchanged at the API and route-contract level
 - a live employee create route at `/employees/new`
 - a live employee edit route at `/employees/:id/edit`
 - direct employee delete from both the list route and the edit route
@@ -844,6 +889,10 @@ Increment 22 refreshes the frontend style and theme before dockerisation and dep
 
 ## Changes Since Previous Increment
 
+- added backend and frontend Dockerfiles plus container-specific ignore files
+- added a compose-based local stack with PostgreSQL, Redis, backend, and frontend services
+- moved local evaluation to a Docker-first full-stack path while keeping the existing non-Docker developer workflow available
+- updated README instructions for Increment 23, including automatic migration/seed startup behavior
 - introduced a shared theme module and one global stylesheet instead of continuing inline style duplication
 - refreshed the app shell, page hero cards, directory toolbars, and AG Grid containers with a warmer editorial direction
 - renamed the visible app title to `Cafe Manager` and removed the increment badge from the UI
@@ -859,4 +908,4 @@ Increment 22 refreshes the frontend style and theme before dockerisation and dep
 - The shared error envelope shape remains intact, while domain `400` responses are now reserved for `INVALID_OPERATION` rather than overloading `VALIDATION_ERROR`.
 - Redis is a performance layer only; it is not part of the domain model or write correctness path.
 - Backend write operations are not automatically retried in this increment.
-- Docker and deployment configuration are not implemented yet.
+- Deployment configuration is not implemented yet.
