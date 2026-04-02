@@ -1363,6 +1363,16 @@ describe("shared routes and query state", () => {
     );
   });
 
+  it("returns to /employees when employee edit cancel is clicked on a clean form", async () => {
+    const user = userEvent.setup();
+    renderRoute("/employees/UI0000010/edit");
+
+    await user.click(await screen.findByRole("button", { name: "Cancel" }));
+
+    expect(await screen.findByRole("heading", { name: "Employees" })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/employees");
+  });
+
   it("shows a retryable read failure for the employee edit page and recovers on retry", async () => {
     let employeeRequestCount = 0;
 

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert, App, Button, Form, Result } from "antd";
 import type { FormProps } from "antd";
-import { unstable_usePrompt, useBeforeUnload, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 
 import { deleteEmployee, getEmployee, listCafes, updateEmployee } from "@/api/client";
 import type { EmployeeWriteRequest } from "@/api/contracts";
@@ -17,6 +17,7 @@ import {
   hasDirtyEmployeeFormValues,
   normalizeEmployeeFormValues,
 } from "@/routes/employees/employeeForm";
+import { invalidateEmployeeWriteQueries, useEmployeeLeaveGuard } from "@/routes/employees/employeeRouteUtils";
 
 export function EmployeeEditRoute() {
   const { modal } = App.useApp();
@@ -57,35 +58,13 @@ export function EmployeeEditRoute() {
   }, [form, initialValues]);
 
   const isDirty = hasDirtyEmployeeFormValues(formValues, initialValues);
-
-  useBeforeUnload((event) => {
-    if (!isDirty || allowNavigationRef.current) {
-      return;
-    }
-
-    event.preventDefault();
-    event.returnValue = "";
-  });
-
-  unstable_usePrompt({
-    message: "You have unsaved changes. Leave this page?",
-    when: ({ currentLocation, nextLocation }) =>
-      isDirty &&
-      !allowNavigationRef.current &&
-      currentLocation.pathname !== nextLocation.pathname,
-  });
+  useEmployeeLeaveGuard({ isDirty, allowNavigationRef });
 
   const updateEmployeeMutation = useMutation({
     mutationFn: (values: EmployeeWriteRequest) => updateEmployee(id ?? "", values),
     onSuccess: async () => {
       allowNavigationRef.current = true;
-      // Employee writes can change both the employee list and cafe staffing
-      // counts, so refresh those backend-owned summaries before leaving.
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["employees", "list"] }),
-        queryClient.invalidateQueries({ queryKey: ["employees", "detail", id] }),
-        queryClient.invalidateQueries({ queryKey: ["cafes", "list"] }),
-      ]);
+      await invalidateEmployeeWriteQueries(queryClient, { employeeId: id ?? "" });
       navigate("/employees");
     },
     onError: () => {
@@ -97,11 +76,7 @@ export function EmployeeEditRoute() {
     mutationFn: () => deleteEmployee(id ?? ""),
     onSuccess: async () => {
       allowNavigationRef.current = true;
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["employees", "list"] }),
-        queryClient.invalidateQueries({ queryKey: ["employees", "detail", id] }),
-        queryClient.invalidateQueries({ queryKey: ["cafes", "list"] }),
-      ]);
+      await invalidateEmployeeWriteQueries(queryClient, { employeeId: id ?? "" });
       navigate("/employees");
     },
     onError: () => {

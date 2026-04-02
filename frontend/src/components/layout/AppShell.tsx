@@ -40,11 +40,11 @@ export function AppShell() {
             GIC Cafe Manager
           </Typography.Title>
           <Typography.Text style={{ color: "rgba(248, 255, 246, 0.78)" }}>
-            Completed cafe and employee list/create/edit workflows with direct delete actions and backend-owned assignment semantics
+            Stabilized cafe and employee workflows with shared route utilities, direct delete actions, and backend-owned assignment semantics
           </Typography.Text>
         </Space>
         <Tag color="green-inverse" bordered={false}>
-          Increment 20
+          Increment 21
         </Tag>
       </Header>
       <Layout>

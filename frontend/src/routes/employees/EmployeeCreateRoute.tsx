@@ -3,7 +3,7 @@ import { useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert, Form } from "antd";
 import type { FormProps } from "antd";
-import { unstable_usePrompt, useBeforeUnload, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 import { createEmployee, listCafes } from "@/api/client";
 import { ApiError } from "@/api/http";
@@ -16,6 +16,7 @@ import {
   type EmployeeFormValues,
   hasDirtyEmployeeFormValues,
 } from "@/routes/employees/employeeForm";
+import { invalidateEmployeeWriteQueries, useEmployeeLeaveGuard } from "@/routes/employees/employeeRouteUtils";
 
 const INITIAL_VALUES = EMPTY_EMPLOYEE_FORM_VALUES;
 
@@ -32,33 +33,13 @@ export function EmployeeCreateRoute() {
   });
 
   const isDirty = hasDirtyEmployeeFormValues(formValues, INITIAL_VALUES);
-
-  useBeforeUnload((event) => {
-    if (!isDirty || allowNavigationRef.current) {
-      return;
-    }
-
-    event.preventDefault();
-    event.returnValue = "";
-  });
-
-  unstable_usePrompt({
-    message: "You have unsaved changes. Leave this page?",
-    when: ({ currentLocation, nextLocation }) =>
-      isDirty &&
-      !allowNavigationRef.current &&
-      currentLocation.pathname !== nextLocation.pathname,
-  });
+  useEmployeeLeaveGuard({ isDirty, allowNavigationRef });
 
   const createEmployeeMutation = useMutation({
     mutationFn: createEmployee,
     onSuccess: async (_, variables) => {
       allowNavigationRef.current = true;
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["employees", "list"] }),
-        queryClient.invalidateQueries({ queryKey: ["cafes", "list"] }),
-        queryClient.invalidateQueries({ queryKey: ["cafes", "detail", variables.cafe_id] }),
-      ]);
+      await invalidateEmployeeWriteQueries(queryClient, { cafeId: variables.cafe_id });
       navigate("/employees");
     },
     onError: () => {
