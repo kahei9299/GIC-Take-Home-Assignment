@@ -12,15 +12,29 @@ from sqlalchemy import engine_from_config, pool
 from app.core.database import Base
 from app.models import Cafe, Employee, EmployeeAssignment
 
-config = context.config
+config = getattr(context, "config", None)
 
-if config.config_file_name is not None:
+if config is not None and config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Importing the models registers all tables on Base.metadata for autogenerate support.
 target_metadata = Base.metadata
 
 ENV_FILE = Path(__file__).resolve().parents[1] / ".env"
+
+
+def normalize_database_url(database_url: str) -> str:
+    """Normalize hosted Postgres URLs to the SQLAlchemy psycopg dialect."""
+
+    normalized = database_url.strip()
+
+    if normalized.startswith("postgres://"):
+        return normalized.replace("postgres://", "postgresql+psycopg://", 1)
+
+    if normalized.startswith("postgresql://"):
+        return normalized.replace("postgresql://", "postgresql+psycopg://", 1)
+
+    return normalized
 
 
 def _database_url_from_dotenv() -> str | None:
@@ -44,17 +58,20 @@ def _database_url_from_dotenv() -> str | None:
 def get_database_url() -> str:
     """Return the Alembic database URL, preferring explicit Alembic overrides first."""
 
+    if config is None:
+        raise RuntimeError("Alembic config is required to resolve the database URL.")
+
     configured_url = config.get_main_option("sqlalchemy.url")
     if configured_url:
-        return configured_url
+        return normalize_database_url(configured_url)
 
     environment_url = os.getenv("DATABASE_URL")
     if environment_url:
-        return environment_url
+        return normalize_database_url(environment_url)
 
     dotenv_url = _database_url_from_dotenv()
     if dotenv_url:
-        return dotenv_url
+        return normalize_database_url(dotenv_url)
 
     raise RuntimeError("DATABASE_URL is required for Alembic migrations.")
 
@@ -93,7 +110,8 @@ def run_migrations_online() -> None:
             context.run_migrations()
 
 
-if context.is_offline_mode():
-    run_migrations_offline()
-else:
-    run_migrations_online()
+if config is not None:
+    if context.is_offline_mode():
+        run_migrations_offline()
+    else:
+        run_migrations_online()
