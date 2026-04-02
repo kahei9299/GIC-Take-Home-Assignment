@@ -46,6 +46,22 @@ describe("cafe list route", () => {
     expect(screen.getByRole("button", { name: "Delete Central Perk" })).toBeInTheDocument();
   });
 
+  it("renders image thumbnails and placeholders in the cafe grid", async () => {
+    renderRoute("/cafes");
+
+    expect(await screen.findByRole("img", { name: "Central Perk logo" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Tanjong Brew logo placeholder")).toBeInTheDocument();
+  });
+
+  it("falls back cleanly when a cafe logo image fails to load", async () => {
+    renderRoute("/cafes");
+
+    const logo = await screen.findByRole("img", { name: "Central Perk logo" });
+    fireEvent.error(logo);
+
+    expect(screen.getByLabelText("Central Perk logo placeholder")).toBeInTheDocument();
+  });
+
   it("shows a loading state before the cafe list resolves", async () => {
     server.use(
       http.get("http://localhost:8000/cafes", async () => {
@@ -484,8 +500,40 @@ describe("shared routes and query state", () => {
     expect(screen.getByRole("textbox", { name: "Description" })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Location" })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Logo URL" })).toBeInTheDocument();
+    expect(screen.getByText("Logo preview")).toBeInTheDocument();
+    expect(screen.getByLabelText("Cafe logo preview placeholder")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Create Cafe" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+  });
+
+  it("updates the create form logo preview as the logo URL changes", async () => {
+    const user = userEvent.setup();
+    renderRoute("/cafes/new");
+
+    const input = await screen.findByRole("textbox", { name: "Logo URL" });
+
+    await user.type(input, "https://cdn.example.com/logo.png");
+
+    expect(screen.getByRole("img", { name: "Cafe logo preview" })).toHaveAttribute(
+      "src",
+      "https://cdn.example.com/logo.png",
+    );
+
+    await user.clear(input);
+
+    expect(screen.getByLabelText("Cafe logo preview placeholder")).toBeInTheDocument();
+  });
+
+  it("falls back when the create form logo preview image fails to load", async () => {
+    const user = userEvent.setup();
+    renderRoute("/cafes/new");
+
+    await user.type(await screen.findByRole("textbox", { name: "Logo URL" }), "https://cdn.example.com/bad.png");
+
+    const preview = screen.getByRole("img", { name: "Cafe logo preview" });
+    fireEvent.error(preview);
+
+    expect(screen.getByLabelText("Cafe logo preview placeholder")).toBeInTheDocument();
   });
 
   it("blocks empty submission with required-field validation", async () => {
@@ -687,8 +735,21 @@ describe("shared routes and query state", () => {
     expect(
       screen.getByDisplayValue(defaultCafeDetailFixtures["cafe-central-1"].logo_url ?? ""),
     ).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Cafe logo preview" })).toHaveAttribute(
+      "src",
+      defaultCafeDetailFixtures["cafe-central-1"].logo_url ?? "",
+    );
     expect(screen.getByRole("button", { name: "Save Changes" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Delete Cafe" })).toBeInTheDocument();
+  });
+
+  it("falls back when the edit form logo preview image fails to load", async () => {
+    renderRoute("/cafes/cafe-central-1/edit");
+
+    const preview = await screen.findByRole("img", { name: "Cafe logo preview" });
+    fireEvent.error(preview);
+
+    expect(screen.getByLabelText("Cafe logo preview placeholder")).toBeInTheDocument();
   });
 
   it("keeps direct edit navigation stable while the detail read is slow", async () => {

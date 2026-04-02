@@ -1,4 +1,4 @@
-import type { ColDef, ICellRendererParams, ValueFormatterParams } from "ag-grid-community";
+import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import type { CafeListItem } from "@/api/contracts";
 
 import { Button, Space, Typography } from "antd";
@@ -6,6 +6,7 @@ import { AgGridReact } from "ag-grid-react";
 import { Link } from "react-router-dom";
 
 import { defaultGridOptions } from "@/components/grid/defaultGridOptions";
+import { CafeLogo } from "@/routes/cafes/CafeLogo";
 
 type CafeListGridProps = {
   cafes: CafeListItem[];
@@ -56,7 +57,8 @@ function buildColumns({
     return <Link to={`/employees?cafe_id=${encodeURIComponent(data.id)}`}>{`${data.employees} employees`}</Link>;
   };
 
-  const formatLogo = ({ value }: ValueFormatterParams<CafeListItem>) => (value ? "Available" : "None");
+  const renderLogo = ({ data }: ICellRendererParams<CafeListItem>) =>
+    data ? <CafeLogo alt={`${data.name} logo`} logoUrl={data.logo_url} variant="grid" /> : null;
 
   const renderActions = ({ data }: ICellRendererParams<CafeListItem>) =>
     data ? (
@@ -97,7 +99,8 @@ function buildColumns({
       headerName: "Logo",
       minWidth: 120,
       maxWidth: 150,
-      valueFormatter: formatLogo,
+      sortable: false,
+      cellRenderer: renderLogo,
     },
     {
       field: "location",
@@ -127,7 +130,7 @@ export function CafeListGrid({ cafes, onDeleteCafe, deletingCafeId }: CafeListGr
     <div className="data-grid-shell ag-theme-quartz">
       <AgGridReact<CafeListItem>
         columnDefs={buildColumns({ deletingCafeId, onDeleteCafe })}
-        gridOptions={defaultGridOptions}
+        gridOptions={{ ...defaultGridOptions, rowHeight: 56 }}
         rowData={cafes}
       />
     </div>

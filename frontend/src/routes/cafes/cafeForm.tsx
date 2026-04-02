@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
 
-import { Button, Form, Input, Space } from "antd";
+import { Button, Form, Input, Space, Typography } from "antd";
 import type { FormInstance, FormProps } from "antd";
 
 import type { CafeDetail, CafeWriteRequest } from "@/api/contracts";
+import { CafeLogo } from "@/routes/cafes/CafeLogo";
 
 export type CafeFormValues = {
   name?: string;
@@ -82,6 +83,8 @@ export function CafeFormFields({
   cancelDisabled,
   extraActions,
 }: CafeFormFieldsProps) {
+  const watchedLogoUrl = Form.useWatch("logo_url", form);
+
   return (
     <Form<CafeFormValues>
       form={form}
@@ -117,6 +120,15 @@ export function CafeFormFields({
       <Form.Item label="Logo URL" name="logo_url">
         <Input placeholder="https://example.com/logo.png" />
       </Form.Item>
+      <div style={{ marginBottom: 24 }}>
+        <Typography.Text
+          style={{ display: "block", marginBottom: 8 }}
+          type="secondary"
+        >
+          Logo preview
+        </Typography.Text>
+        <CafeLogo alt="Cafe logo preview" logoUrl={watchedLogoUrl} variant="form" />
+      </div>
       <Space>
         <Button type="primary" htmlType="submit" loading={submitLoading}>
           {submitLabel}
