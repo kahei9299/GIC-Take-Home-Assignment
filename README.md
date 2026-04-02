@@ -70,16 +70,15 @@ Current iteration: Increment 23, Dockerization and local container workflow.
 Increment 23 now includes deployment configuration for:
 
 - Vercel frontend deployment from `frontend/`
-- Railway backend deployment from `backend/`
-- Railway PostgreSQL for the runtime database
-- Railway Redis for cache/runtime parity with local Docker
+- Render backend deployment from `backend/`
+- Render PostgreSQL for the runtime database
 
 Hosted service split:
 
 - Vercel serves the React + Vite frontend
-- Railway runs the FastAPI backend from the checked-in Docker image
-- Railway PostgreSQL is the persistent demo database
-- Railway Redis backs cache reads, but the app still fails open if Redis is temporarily degraded
+- Render runs the FastAPI backend from the checked-in Docker image
+- Render PostgreSQL is the persistent demo database
+- Redis remains optional and is not required for the hosted deployment path
 
 ## Backend Structure
 
@@ -368,27 +367,26 @@ Recommended Vercel project settings:
 Required Vercel environment variable:
 
 ```bash
-VITE_API_BASE_URL=https://your-backend-service.up.railway.app
+VITE_API_BASE_URL=https://your-backend-service.onrender.com
 ```
 
-After Vercel assigns the public frontend domain, add that exact origin to the Railway backend `CORS_ALLOWED_ORIGINS` value.
+After Vercel assigns the public frontend domain, add that exact origin to the Render backend `CORS_ALLOWED_ORIGINS` value.
 
-## Deploy The Backend To Railway
+## Deploy The Backend To Render
 
-Deploy the `backend/` directory as the Railway service root.
+Deploy the repository to Render using the Blueprint at the repo root.
 
 Checked-in backend deployment config:
 
-- `backend/railway.toml`
-- `backend/.env.railway.example`
+- `render.yaml`
+- `backend/.env.render.example`
 - `backend/Dockerfile`
 - `backend/docker-entrypoint.sh`
 
-Railway should provision and connect:
+Render should provision and connect:
 
 - one PostgreSQL service
-- one Redis service
-- one backend service built from the backend Dockerfile
+- one backend web service built from the backend Dockerfile
 
 The backend service keeps the current startup behavior:
 
@@ -396,13 +394,12 @@ The backend service keeps the current startup behavior:
 - runs `python scripts/seed.py`
 - starts `uvicorn app.main:app --host 0.0.0.0 --port 8000`
 
-Required Railway backend environment variables:
+Required Render backend environment variables:
 
 ```bash
 APP_NAME=gic-take-home-backend
 APP_ENV=production
-DATABASE_URL=<Railway PostgreSQL connection URL>
-REDIS_URL=<Railway Redis connection URL>
+DATABASE_URL=<Render PostgreSQL connection URL>
 CORS_ALLOWED_ORIGINS=https://your-frontend-project.vercel.app
 DATABASE_CONNECT_TIMEOUT_SECONDS=5
 DATABASE_POOL_TIMEOUT_SECONDS=5
@@ -421,15 +418,15 @@ LOG_LEVEL=INFO
 LOG_FORMAT=json
 ```
 
-Use `/health/ready` as the Railway healthcheck path.
+Render's Blueprint already wires the database connection and `/health/ready` healthcheck. The app also normalizes Render-style `postgresql://...` database URLs to the SQLAlchemy `postgresql+psycopg://...` format automatically, so you do not need to rewrite the connection string manually.
 
 Suggested deployment order:
 
-1. Create the Railway PostgreSQL service.
-2. Create the Railway Redis service.
-3. Create the Railway backend service from `backend/`.
+1. Create a new Render Blueprint from this repository.
+2. Let Render create the PostgreSQL database and backend web service from `render.yaml`.
+3. Enter the Vercel frontend URL for `CORS_ALLOWED_ORIGINS` when Render prompts for it, or update it after the first deploy.
 4. Copy the backend public URL into Vercel as `VITE_API_BASE_URL`.
-5. Add the Vercel frontend origin back into Railway as `CORS_ALLOWED_ORIGINS`.
+5. Redeploy the backend if you update `CORS_ALLOWED_ORIGINS` after Vercel goes live.
 
 Increment 23 keeps the backend authoritative for cafe filtering, cafe and employee write validation, assignment semantics, and delete behavior while adding a reproducible local container workflow:
 
@@ -577,7 +574,7 @@ REDIS_RETRY_MAX_DELAY_MS=500
 - app startup and shutdown are logged through FastAPI lifespan hooks
 - backend shutdown explicitly disposes the shared SQLAlchemy engine and closes the shared Redis client when one was created
 
-For Railway deployments, use `GET /health/ready` as the service healthcheck endpoint rather than `GET /health`.
+For Render deployments, use `GET /health/ready` as the service healthcheck endpoint rather than `GET /health`.
 
 ## CORS Configuration
 
@@ -599,7 +596,7 @@ CORS_ALLOWED_ORIGINS=http://localhost:5173,https://staging-frontend.example.com,
 After both services are live, verify:
 
 - Vercel frontend loads from the public URL
-- Railway backend returns `200` from `/health/ready`
+- Render backend returns `200` from `/health/ready`
 - seeded cafes and employees appear in the UI
 - create, update, and delete flows work from the hosted frontend
 - backend responses include the expected CORS headers for the Vercel origin
@@ -621,7 +618,7 @@ Deployment-specific verification:
 ```bash
 docker build -t gic-backend ./backend
 cd frontend
-VITE_API_BASE_URL=https://example-backend.up.railway.app pnpm build
+VITE_API_BASE_URL=https://example-backend.onrender.com pnpm build
 ```
 
 Frontend coverage in this increment includes:
@@ -1018,4 +1015,4 @@ Increment 23 adds Dockerized local evaluation on top of the Increment 22 UI refr
 - The shared error envelope shape remains intact, while domain `400` responses are now reserved for `INVALID_OPERATION` rather than overloading `VALIDATION_ERROR`.
 - Redis is a performance layer only; it is not part of the domain model or write correctness path.
 - Backend write operations are not automatically retried in this increment.
-- Deployment configuration is now checked in for Vercel frontend hosting and Railway backend hosting with Railway PostgreSQL and Redis.
+- Deployment configuration is now checked in for Vercel frontend hosting and Render backend hosting with Render PostgreSQL.

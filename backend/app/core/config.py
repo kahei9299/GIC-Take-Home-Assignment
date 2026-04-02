@@ -3,6 +3,7 @@ from pathlib import Path
 
 from pydantic import Field
 from pydantic import computed_field
+from pydantic import field_validator
 from pydantic import ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -42,6 +43,24 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def normalize_database_url(cls, value: str) -> str:
+        """Normalize hosted Postgres URLs to the SQLAlchemy psycopg dialect."""
+
+        if not isinstance(value, str):
+            return value
+
+        normalized = value.strip()
+
+        if normalized.startswith("postgres://"):
+            return normalized.replace("postgres://", "postgresql+psycopg://", 1)
+
+        if normalized.startswith("postgresql://"):
+            return normalized.replace("postgresql://", "postgresql+psycopg://", 1)
+
+        return normalized
 
     @computed_field
     @property
