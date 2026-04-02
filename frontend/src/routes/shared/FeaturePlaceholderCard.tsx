@@ -23,8 +23,8 @@ export function FeaturePlaceholderCard({
         </div>
         <Space wrap>
           <Tag color="blue">Route wired</Tag>
-          <Tag color="green">Query provider ready</Tag>
-          <Tag color="gold">Business UI deferred</Tag>
+          <Tag color="green">Shared providers ready</Tag>
+          <Tag color="gold">Reusable shell</Tag>
         </Space>
         {primaryActionLabel && primaryActionTo ? (
           <Link to={primaryActionTo}>

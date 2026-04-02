@@ -1,1 +1,1 @@
-"""Shared backend primitives reused across later feature modules."""
+"""Shared backend primitives reused across application modules."""

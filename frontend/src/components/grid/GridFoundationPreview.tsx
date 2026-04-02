@@ -17,15 +17,14 @@ const previewColumns: ColDef<PreviewRow>[] = [
 
 const previewRows: PreviewRow[] = [
   { name: "Status", value: "AG Grid mounted" },
-  { name: "Usage", value: "Business columns arrive in later increments" },
+  { name: "Usage", value: "Shared grid defaults available" },
 ];
 
 export function GridFoundationPreview() {
   return (
     <Card title="Grid foundation">
       <Typography.Paragraph>
-        AG Grid is installed and wrapped with shared defaults so the cafe and employee list slices can
-        plug in real column definitions later.
+        AG Grid is installed and wrapped with shared defaults that can be reused across tabular views.
       </Typography.Paragraph>
       <div className="ag-theme-quartz" style={{ height: 220 }}>
         <AgGridReact<PreviewRow>

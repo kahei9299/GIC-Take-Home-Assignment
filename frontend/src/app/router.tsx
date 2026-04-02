@@ -8,9 +8,8 @@ import { EmployeeCreateRoute } from "@/routes/employees/EmployeeCreateRoute";
 import { EmployeeEditRoute } from "@/routes/employees/EmployeeEditRoute";
 import { EmployeeListRoute } from "@/routes/employees/EmployeeListRoute";
 
-// These are the stable route contracts for the frontend foundation increment.
-// Later increments should fill these routes with feature behavior instead of
-// changing the URL structure.
+// Keep the route paths stable so deep links, navigation, and backend-linked
+// UI flows remain consistent across the application.
 export const appRoutes = [
   {
     path: "/",
