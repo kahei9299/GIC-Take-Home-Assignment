@@ -65,9 +65,21 @@ Current iteration: Increment 23, Dockerization and local container workflow.
 - root Docker Compose stack for backend, frontend, PostgreSQL, and Redis
 - frontend Vitest + Testing Library + MSW coverage for the completed cafe slice plus employee list deep links, employee create/edit/delete flows, retry states, not-found handling, and dirty-form prompt wiring
 
-## What Does Not Exist Yet
+## Hosted Deployment
 
-- deployment config
+Increment 23 now includes deployment configuration for:
+
+- Vercel frontend deployment from `frontend/`
+- Railway backend deployment from `backend/`
+- Railway PostgreSQL for the runtime database
+- Railway Redis for cache/runtime parity with local Docker
+
+Hosted service split:
+
+- Vercel serves the React + Vite frontend
+- Railway runs the FastAPI backend from the checked-in Docker image
+- Railway PostgreSQL is the persistent demo database
+- Railway Redis backs cache reads, but the app still fails open if Redis is temporarily degraded
 
 ## Backend Structure
 
@@ -335,6 +347,90 @@ Default local value:
 VITE_API_BASE_URL=http://localhost:8000
 ```
 
+## Deploy The Frontend To Vercel
+
+Deploy the `frontend/` directory as the Vercel project root.
+
+Checked-in frontend deployment config:
+
+- `frontend/vercel.json`
+- `frontend/.env.preview.example`
+- `frontend/.env.production.example`
+
+Recommended Vercel project settings:
+
+- framework preset: Vite
+- root directory: `frontend`
+- install command: `pnpm install --frozen-lockfile`
+- build command: `pnpm build`
+- output directory: `dist`
+
+Required Vercel environment variable:
+
+```bash
+VITE_API_BASE_URL=https://your-backend-service.up.railway.app
+```
+
+After Vercel assigns the public frontend domain, add that exact origin to the Railway backend `CORS_ALLOWED_ORIGINS` value.
+
+## Deploy The Backend To Railway
+
+Deploy the `backend/` directory as the Railway service root.
+
+Checked-in backend deployment config:
+
+- `backend/railway.toml`
+- `backend/.env.railway.example`
+- `backend/Dockerfile`
+- `backend/docker-entrypoint.sh`
+
+Railway should provision and connect:
+
+- one PostgreSQL service
+- one Redis service
+- one backend service built from the backend Dockerfile
+
+The backend service keeps the current startup behavior:
+
+- runs `alembic upgrade head`
+- runs `python scripts/seed.py`
+- starts `uvicorn app.main:app --host 0.0.0.0 --port 8000`
+
+Required Railway backend environment variables:
+
+```bash
+APP_NAME=gic-take-home-backend
+APP_ENV=production
+DATABASE_URL=<Railway PostgreSQL connection URL>
+REDIS_URL=<Railway Redis connection URL>
+CORS_ALLOWED_ORIGINS=https://your-frontend-project.vercel.app
+DATABASE_CONNECT_TIMEOUT_SECONDS=5
+DATABASE_POOL_TIMEOUT_SECONDS=5
+DATABASE_POOL_RECYCLE_SECONDS=1800
+DATABASE_POOL_SIZE=5
+DATABASE_MAX_OVERFLOW=10
+DATABASE_STATEMENT_TIMEOUT_MS=5000
+CACHE_TTL_SECONDS=60
+REDIS_SOCKET_CONNECT_TIMEOUT_SECONDS=0.5
+REDIS_SOCKET_TIMEOUT_SECONDS=0.5
+REDIS_RETRY_MAX_ATTEMPTS=3
+REDIS_RETRY_BASE_DELAY_MS=50
+REDIS_RETRY_MAX_DELAY_MS=500
+READINESS_CHECK_TIMEOUT_SECONDS=1.0
+LOG_LEVEL=INFO
+LOG_FORMAT=json
+```
+
+Use `/health/ready` as the Railway healthcheck path.
+
+Suggested deployment order:
+
+1. Create the Railway PostgreSQL service.
+2. Create the Railway Redis service.
+3. Create the Railway backend service from `backend/`.
+4. Copy the backend public URL into Vercel as `VITE_API_BASE_URL`.
+5. Add the Vercel frontend origin back into Railway as `CORS_ALLOWED_ORIGINS`.
+
 Increment 23 keeps the backend authoritative for cafe filtering, cafe and employee write validation, assignment semantics, and delete behavior while adding a reproducible local container workflow:
 
 - the cafe list page lives at `/cafes`
@@ -498,9 +594,15 @@ Example:
 CORS_ALLOWED_ORIGINS=http://localhost:5173,https://staging-frontend.example.com,https://app.example.com
 ```
 
-## What Still Does Not Exist
+## Deployment Verification
 
-- deployment config
+After both services are live, verify:
+
+- Vercel frontend loads from the public URL
+- Railway backend returns `200` from `/health/ready`
+- seeded cafes and employees appear in the UI
+- create, update, and delete flows work from the hosted frontend
+- backend responses include the expected CORS headers for the Vercel origin
 
 ## How To Test Increment 23
 
@@ -512,6 +614,14 @@ pytest tests/unit/test_config.py tests/unit/test_database.py tests/unit/test_cac
 cd ../frontend
 pnpm test
 pnpm build
+```
+
+Deployment-specific verification:
+
+```bash
+docker build -t gic-backend ./backend
+cd frontend
+VITE_API_BASE_URL=https://example-backend.up.railway.app pnpm build
 ```
 
 Frontend coverage in this increment includes:
@@ -908,4 +1018,4 @@ Increment 23 adds Dockerized local evaluation on top of the Increment 22 UI refr
 - The shared error envelope shape remains intact, while domain `400` responses are now reserved for `INVALID_OPERATION` rather than overloading `VALIDATION_ERROR`.
 - Redis is a performance layer only; it is not part of the domain model or write correctness path.
 - Backend write operations are not automatically retried in this increment.
-- Deployment configuration is not implemented yet.
+- Deployment configuration is now checked in for Vercel frontend hosting and Railway backend hosting with Railway PostgreSQL and Redis.
